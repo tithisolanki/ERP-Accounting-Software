@@ -146,7 +146,14 @@ export class ReportsService {
         pan_number: company?.pan_number || undefined,
         address: company?.address || undefined,
         phone: company?.phone || undefined,
-        email: company?.email || undefined
+        email: company?.email || undefined,
+        bank1_name: company?.bank1_name || undefined,
+        bank1_account_no: company?.bank1_account_no || undefined,
+        bank1_ifsc: company?.bank1_ifsc || undefined,
+        bank2_name: company?.bank2_name || undefined,
+        bank2_account_no: company?.bank2_account_no || undefined,
+        bank2_ifsc: company?.bank2_ifsc || undefined,
+        credit_interest_rate: company?.credit_interest_rate ?? undefined
       },
       customer: {
         name: customer.name,

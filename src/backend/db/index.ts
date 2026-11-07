@@ -217,7 +217,37 @@ async function ensureSchemaUpdates(db: any) {
     console.error("Failed to ensure accounts and groups indexes:", e);
   }
 
-  // 10. One document number per company per financial year.
+  // 10. Add bank letterhead + credit-interest columns to companies if missing.
+  // Backfill is done only on the one-time migration run (not on every startup), so a
+  // freshly created second company starts blank instead of inheriting the first company's bank account.
+  const companyCols = await db.all("PRAGMA table_info(companies)");
+  if (companyCols.length > 0 && !companyCols.some((c: any) => c.name === 'bank1_account_no')) {
+    try {
+      await db.exec("ALTER TABLE companies ADD COLUMN bank1_name TEXT");
+      await db.exec("ALTER TABLE companies ADD COLUMN bank1_account_no TEXT");
+      await db.exec("ALTER TABLE companies ADD COLUMN bank1_ifsc TEXT");
+      await db.exec("ALTER TABLE companies ADD COLUMN bank2_name TEXT");
+      await db.exec("ALTER TABLE companies ADD COLUMN bank2_account_no TEXT");
+      await db.exec("ALTER TABLE companies ADD COLUMN bank2_ifsc TEXT");
+      await db.exec("ALTER TABLE companies ADD COLUMN credit_interest_rate REAL DEFAULT 24");
+      console.log("Added bank + credit_interest_rate columns to companies.");
+
+      // Carry forward the bank details that used to be hardcoded in pdf.service.ts so the
+      // existing company's printed invoices don't regress until someone reviews Settings.
+      await db.exec(`
+        UPDATE companies SET
+          bank1_name = 'IDBI BANK', bank1_account_no = '053665380000259', bank1_ifsc = 'IBKL0000536',
+          bank2_name = 'ICICI BANK', bank2_account_no = '102205010744', bank2_ifsc = 'ICIC0006426',
+          credit_interest_rate = 24
+        WHERE bank1_account_no IS NULL
+      `);
+      console.log("Backfilled existing companies with prior hardcoded bank details.");
+    } catch (e) {
+      console.error("Failed to add bank/credit_interest_rate columns to companies:", e);
+    }
+  }
+
+  // 11. One document number per company per financial year.
   // If an old database already has duplicates, the index cannot be built: we log which
   // ones so the owner can renumber them (see RUNBOOK.md), and the app checks in code anyway.
   const uniqueNumbers = [

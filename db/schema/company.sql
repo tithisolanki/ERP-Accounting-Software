@@ -7,6 +7,14 @@ CREATE TABLE IF NOT EXISTS companies (
   address TEXT,
   phone TEXT,
   email TEXT,
+  -- Letterhead bank details printed on the Sales Invoice (two accounts, matching the real printed form)
+  bank1_name TEXT,
+  bank1_account_no TEXT,
+  bank1_ifsc TEXT,
+  bank2_name TEXT,
+  bank2_account_no TEXT,
+  bank2_ifsc TEXT,
+  credit_interest_rate REAL DEFAULT 24,
   is_dirty INTEGER DEFAULT 1,
   updated_at TEXT NOT NULL
 );

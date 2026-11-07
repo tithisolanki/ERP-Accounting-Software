@@ -20,6 +20,13 @@ export const Settings: React.FC = () => {
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [bank1Name, setBank1Name] = useState('');
+  const [bank1AccountNo, setBank1AccountNo] = useState('');
+  const [bank1Ifsc, setBank1Ifsc] = useState('');
+  const [bank2Name, setBank2Name] = useState('');
+  const [bank2AccountNo, setBank2AccountNo] = useState('');
+  const [bank2Ifsc, setBank2Ifsc] = useState('');
+  const [creditInterestRate, setCreditInterestRate] = useState('');
 
   // Password state
   const [currentPass, setCurrentPass] = useState('');
@@ -58,6 +65,13 @@ export const Settings: React.FC = () => {
         setAddress(activeCompany.address || '');
         setPhone(activeCompany.phone || '');
         setEmail(activeCompany.email || '');
+        setBank1Name(activeCompany.bank1_name || '');
+        setBank1AccountNo(activeCompany.bank1_account_no || '');
+        setBank1Ifsc(activeCompany.bank1_ifsc || '');
+        setBank2Name(activeCompany.bank2_name || '');
+        setBank2AccountNo(activeCompany.bank2_account_no || '');
+        setBank2Ifsc(activeCompany.bank2_ifsc || '');
+        setCreditInterestRate(activeCompany.credit_interest_rate != null ? String(activeCompany.credit_interest_rate) : '');
       }
     } catch {
       addNotification('error', 'Failed to load company details.');
@@ -89,7 +103,14 @@ export const Settings: React.FC = () => {
         pan_number: panNumber,
         address,
         phone,
-        email
+        email,
+        bank1_name: bank1Name,
+        bank1_account_no: bank1AccountNo,
+        bank1_ifsc: bank1Ifsc,
+        bank2_name: bank2Name,
+        bank2_account_no: bank2AccountNo,
+        bank2_ifsc: bank2Ifsc,
+        credit_interest_rate: creditInterestRate
       }, token!);
 
       addNotification('success', 'Company details updated successfully.');
@@ -251,6 +272,72 @@ export const Settings: React.FC = () => {
                 className={`w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg outline-none outline-0 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 transition-all shadow-sm text-slate-800 animate-none ${
                   !isAdmin ? 'bg-slate-100/60 cursor-not-allowed' : 'bg-slate-50/50 hover:bg-slate-50 focus:bg-white'
                 }`}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-100">
+              <label className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Bank &amp; Invoice Terms (printed on Sales Invoice)</label>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <Input
+                label="Bank 1 Name"
+                value={bank1Name}
+                onChange={(e) => setBank1Name(e.target.value)}
+                placeholder="IDBI BANK"
+                disabled={!isAdmin}
+                className={!isAdmin ? 'bg-slate-100/60' : ''}
+              />
+              <Input
+                label="Bank 1 Account No."
+                value={bank1AccountNo}
+                onChange={(e) => setBank1AccountNo(e.target.value)}
+                disabled={!isAdmin}
+                className={!isAdmin ? 'bg-slate-100/60' : ''}
+              />
+              <Input
+                label="Bank 1 IFSC"
+                value={bank1Ifsc}
+                onChange={(e) => setBank1Ifsc(e.target.value)}
+                disabled={!isAdmin}
+                className={!isAdmin ? 'bg-slate-100/60' : ''}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <Input
+                label="Bank 2 Name"
+                value={bank2Name}
+                onChange={(e) => setBank2Name(e.target.value)}
+                placeholder="ICICI BANK"
+                disabled={!isAdmin}
+                className={!isAdmin ? 'bg-slate-100/60' : ''}
+              />
+              <Input
+                label="Bank 2 Account No."
+                value={bank2AccountNo}
+                onChange={(e) => setBank2AccountNo(e.target.value)}
+                disabled={!isAdmin}
+                className={!isAdmin ? 'bg-slate-100/60' : ''}
+              />
+              <Input
+                label="Bank 2 IFSC"
+                value={bank2Ifsc}
+                onChange={(e) => setBank2Ifsc(e.target.value)}
+                disabled={!isAdmin}
+                className={!isAdmin ? 'bg-slate-100/60' : ''}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Credit Interest Rate (%)"
+                value={creditInterestRate}
+                onChange={(e) => setCreditInterestRate(e.target.value)}
+                placeholder="24"
+                type="number"
+                disabled={!isAdmin}
+                className={!isAdmin ? 'bg-slate-100/60' : ''}
               />
             </div>
 
