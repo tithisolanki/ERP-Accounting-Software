@@ -36,6 +36,7 @@ export class AccVoucherRepository {
       accountId: string;
       amount: number;
       date: string;
+      paymentMode: string;
       referenceNumber: string | null;
       notes: string;
       now: string;
@@ -44,7 +45,7 @@ export class AccVoucherRepository {
     await db.run(
       `INSERT INTO ${tableName} (id, company_id, account_id, amount, date, payment_mode, reference_number, notes, is_dirty, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-      [line.id, line.companyId, line.accountId, line.amount, line.date, 'Cheque', line.referenceNumber, line.notes, line.now]
+      [line.id, line.companyId, line.accountId, line.amount, line.date, line.paymentMode, line.referenceNumber, line.notes, line.now]
     );
   }
 

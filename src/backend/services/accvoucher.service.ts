@@ -70,7 +70,7 @@ export class AccVoucherService {
   }
 
   async saveVoucher(companyId: string, user: { id: string; username: string }, body: any): Promise<string> {
-    const { type, voucherDate, voucherNo, bankAccountName, chequeNo, drawnOn, voucherType, lines, isNew } = body;
+    const { type, voucherDate, voucherNo, bankAccountName, chequeNo, drawnOn, paymentMode, voucherType, lines, isNew } = body;
 
     if (type !== 'payment' && type !== 'receipt' && type !== 'journal') {
       throw new Error('Invalid transaction type.');
@@ -170,6 +170,7 @@ export class AccVoucherService {
           accountId: line.accountId,
           amount: Number(line.amount),
           date: voucherDate,
+          paymentMode: paymentMode || 'Cheque',
           referenceNumber: chequeNo || null,
           notes: serializedNotes,
           now

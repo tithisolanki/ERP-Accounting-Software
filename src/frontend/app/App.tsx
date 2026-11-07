@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { Login } from '../pages/Login';
 import logo from '../../../assets/logo.png';
 import { Masters } from '../pages/Masters';
-import { Vouchers, BankVouchers, JournalVouchers } from '../modules/vouchers';
+import { Vouchers, BankVouchers, CashVouchers, JournalVouchers } from '../modules/vouchers';
 import { Registers } from '../modules/registers';
 import { Settings } from '../pages/Settings';
 import { Modal } from '../components/Modal';
@@ -161,6 +161,10 @@ export const App: React.FC = () => {
         return <BankVouchers type="payment" />;
       case 'bank_receipt':
         return <BankVouchers type="receipt" />;
+      case 'cash_payment':
+        return <CashVouchers type="payment" />;
+      case 'cash_receipt':
+        return <CashVouchers type="receipt" />;
       case 'journal_voucher':
         return <JournalVouchers />;
       case 'backup':
@@ -236,7 +240,7 @@ export const App: React.FC = () => {
               key={item.id}
               onClick={() => handleTabSwitch(item.id)}
               className={`px-3 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt'))
+                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt'))
                   ? 'bg-slate-100/80 text-indigo-650 font-extrabold border border-slate-200/50 shadow-inner' 
                   : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50'
               }`}
@@ -447,7 +451,7 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'journal_voucher' || activeTab === 'account_opening' || activeTab === 'stock_opening') && (
+            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'journal_voucher' || activeTab === 'account_opening' || activeTab === 'stock_opening') && (
               <div>
                 <div className="flex items-center gap-2 px-3 py-3 rounded-xl bg-indigo-50 text-indigo-700 font-bold mb-3.5 text-xs shadow-sm">
                   <FileText className="w-4 h-4 shrink-0" />

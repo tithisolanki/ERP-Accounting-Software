@@ -67,6 +67,8 @@ export const voucherSidebarItems = [
 export const accountVoucherItems = [
   { id: 'bank_payment', name: 'Bank Payment' },
   { id: 'bank_receipt', name: 'Bank Receipt' },
+  { id: 'cash_payment', name: 'Cash Payment' },
+  { id: 'cash_receipt', name: 'Cash Receipt' },
   { id: 'journal_voucher', name: 'Journal Voucher' }
 ];
 
