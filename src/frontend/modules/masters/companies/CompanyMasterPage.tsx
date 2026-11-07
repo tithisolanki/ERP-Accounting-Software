@@ -95,12 +95,15 @@ export const CompanyMasterPage: React.FC = () => {
 
   const handleCompanySubmit = async (values: CompanyFormValues) => {
     if (!token) return;
+    // credit_interest_rate is a plain string in the form (this page doesn't render a field for
+    // it today) but a number on the Company type - convert here rather than in the Zod schema.
+    const payload = { ...values, credit_interest_rate: values.credit_interest_rate ? Number(values.credit_interest_rate) : undefined };
     try {
       if (editItem) {
-        await CompanyService.update(editItem.id, values, token);
+        await CompanyService.update(editItem.id, payload, token);
         addNotification('success', 'Company details updated successfully.');
       } else {
-        await CompanyService.create(values, token);
+        await CompanyService.create(payload, token);
         addNotification('success', 'Company registered successfully.');
       }
       setEditModalOpen(false);
@@ -115,8 +118,9 @@ export const CompanyMasterPage: React.FC = () => {
 
   const handleOwnProfileSubmit = async (values: CompanyFormValues) => {
     if (!token || !selectedComp) return;
+    const payload = { ...values, credit_interest_rate: values.credit_interest_rate ? Number(values.credit_interest_rate) : undefined };
     try {
-      await CompanyService.update(selectedComp.id, values, token);
+      await CompanyService.update(selectedComp.id, payload, token);
       addNotification('success', 'Your company profile details have been saved.');
       fetchCompanies();
     } catch (err: any) {

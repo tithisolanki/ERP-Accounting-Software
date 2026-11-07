@@ -110,7 +110,7 @@ export const Settings: React.FC = () => {
         bank2_name: bank2Name,
         bank2_account_no: bank2AccountNo,
         bank2_ifsc: bank2Ifsc,
-        credit_interest_rate: creditInterestRate
+        credit_interest_rate: creditInterestRate ? Number(creditInterestRate) : undefined
       }, token!);
 
       addNotification('success', 'Company details updated successfully.');

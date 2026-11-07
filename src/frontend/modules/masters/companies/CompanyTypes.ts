@@ -14,7 +14,10 @@ export const CompanyFormSchema = z.object({
   bank2_name: z.string().optional().or(z.literal('')),
   bank2_account_no: z.string().optional().or(z.literal('')),
   bank2_ifsc: z.string().optional().or(z.literal('')),
-  credit_interest_rate: z.coerce.number().optional()
+  // plain string, like every other field here - this form never renders/submits this field today
+  // (see CompanyMasterPage.tsx); z.coerce.number() would need useForm's input/output generics split
+  // apart (z.input<> vs z.output<>) to type-check with zodResolver, which isn't worth it for an unused field
+  credit_interest_rate: z.string().optional().or(z.literal(''))
 });
 
 export type CompanyFormValues = z.infer<typeof CompanyFormSchema>;
