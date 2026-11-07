@@ -7,6 +7,13 @@ export interface Company {
   address?: string | null;
   phone?: string | null;
   email?: string | null;
+  bank1_name?: string | null;
+  bank1_account_no?: string | null;
+  bank1_ifsc?: string | null;
+  bank2_name?: string | null;
+  bank2_account_no?: string | null;
+  bank2_ifsc?: string | null;
+  credit_interest_rate?: number | null;
   is_dirty?: number;
   updated_at?: string;
 }

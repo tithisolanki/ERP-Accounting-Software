@@ -16,18 +16,24 @@ export class CompanyRepository {
   async create(company: Company): Promise<void> {
     const db = await getDb();
     await db.run(
-      `INSERT INTO companies (id, name, code, gst_number, pan_number, address, phone, email, is_dirty, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-      [company.id, company.name, company.code, company.gst_number, company.pan_number, company.address, company.phone, company.email, company.updated_at]
+      `INSERT INTO companies (id, name, code, gst_number, pan_number, address, phone, email,
+         bank1_name, bank1_account_no, bank1_ifsc, bank2_name, bank2_account_no, bank2_ifsc, credit_interest_rate, is_dirty, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+      [company.id, company.name, company.code, company.gst_number, company.pan_number, company.address, company.phone, company.email,
+        company.bank1_name, company.bank1_account_no, company.bank1_ifsc, company.bank2_name, company.bank2_account_no, company.bank2_ifsc, company.credit_interest_rate, company.updated_at]
     );
   }
 
   async update(id: string, company: Company): Promise<void> {
     const db = await getDb();
     await db.run(
-      `UPDATE companies SET name = ?, gst_number = ?, pan_number = ?, address = ?, phone = ?, email = ?, is_dirty = 1, updated_at = ?
+      `UPDATE companies SET name = ?, gst_number = ?, pan_number = ?, address = ?, phone = ?, email = ?,
+         bank1_name = ?, bank1_account_no = ?, bank1_ifsc = ?, bank2_name = ?, bank2_account_no = ?, bank2_ifsc = ?, credit_interest_rate = ?,
+         is_dirty = 1, updated_at = ?
        WHERE id = ?`,
-      [company.name, company.gst_number, company.pan_number, company.address, company.phone, company.email, company.updated_at, id]
+      [company.name, company.gst_number, company.pan_number, company.address, company.phone, company.email,
+        company.bank1_name, company.bank1_account_no, company.bank1_ifsc, company.bank2_name, company.bank2_account_no, company.bank2_ifsc, company.credit_interest_rate,
+        company.updated_at, id]
     );
   }
 }

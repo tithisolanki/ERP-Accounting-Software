@@ -8,6 +8,13 @@ interface InvoiceData {
     address?: string;
     phone?: string;
     email?: string;
+    bank1_name?: string;
+    bank1_account_no?: string;
+    bank1_ifsc?: string;
+    bank2_name?: string;
+    bank2_account_no?: string;
+    bank2_ifsc?: string;
+    credit_interest_rate?: number;
   };
   customer: {
     name: string;
@@ -346,7 +353,8 @@ export async function generateInvoicePdf(data: InvoiceData, copies: string[]): P
 
     // NETT RATE NO LESS Totals Row (y: 170 to 185)
     page.drawLine({ start: { x: 20, y: 170 }, end: { x: 575, y: 170 }, thickness: 1, color: rgb(0,0,0) });
-    page.drawText('NETT RATE NO LESS', { x: 25, y: 174, size: 8, font: boldFont });
+    const nettRateLabel = (data.remark || '').trim().slice(0, 35) || 'NETT RATE NO LESS';
+    page.drawText(nettRateLabel, { x: 25, y: 174, size: 8, font: boldFont });
     
     const totPcsStr = String(totalPcs);
     page.drawText(totPcsStr, { x: 335 - boldFont.widthOfTextAtSize(totPcsStr, 8), y: 174, size: 8, font: boldFont });
@@ -361,11 +369,16 @@ export async function generateInvoicePdf(data: InvoiceData, copies: string[]): P
     page.drawLine({ start: { x: 20, y: 120 }, end: { x: 350, y: 120 }, thickness: 0.5, color: rgb(0,0,0) });
     page.drawLine({ start: { x: 20, y: 95 }, end: { x: 350, y: 95 }, thickness: 0.5, color: rgb(0,0,0) });
 
-    // Bank details
-    page.drawText('IDBI BANK  A/C NO. - 053665380000259', { x: 25, y: 158, size: 7, font: boldFont });
-    page.drawText('IFSC NO.- IBKL0000536', { x: 215, y: 158, size: 7, font: boldFont });
-    page.drawText('ICICI BANK  A/C NO.102205010744', { x: 25, y: 149, size: 7, font: boldFont });
-    page.drawText('IFSC NO.ICIC0006426', { x: 215, y: 149, size: 7, font: boldFont });
+    // Bank details (from the company's own record, not hardcoded, so a second company's
+    // customers don't pay into the first company's account)
+    if (data.company.bank1_name || data.company.bank1_account_no) {
+      page.drawText(`${data.company.bank1_name || ''}  A/C NO. - ${data.company.bank1_account_no || ''}`, { x: 25, y: 158, size: 7, font: boldFont });
+      page.drawText(`IFSC NO.- ${data.company.bank1_ifsc || ''}`, { x: 215, y: 158, size: 7, font: boldFont });
+    }
+    if (data.company.bank2_name || data.company.bank2_account_no) {
+      page.drawText(`${data.company.bank2_name || ''}  A/C NO. ${data.company.bank2_account_no || ''}`, { x: 25, y: 149, size: 7, font: boldFont });
+      page.drawText(`IFSC NO.${data.company.bank2_ifsc || ''}`, { x: 215, y: 149, size: 7, font: boldFont });
+    }
 
     // Invoice Value in Words (safely wrapped)
     page.drawText('Invoice Value in Words :', { x: 25, y: 132, size: 7, font: font });
@@ -389,7 +402,8 @@ export async function generateInvoicePdf(data: InvoiceData, copies: string[]): P
     page.drawText('1) Goods once sold cannot be taken back.', { x: 23, y: 78, size: 6, font: font });
     page.drawText('2) No claims for Shortage,Breakage and Damage in transit.', { x: 23, y: 70, size: 6, font: font });
     page.drawText('3) Our responsibility Ceases after goods leaves our premises.', { x: 23, y: 62, size: 6, font: font });
-    page.drawText('4) If the Bill is not paid within 90 days interest @ 24% will be charged.', { x: 23, y: 54, size: 6, font: font });
+    const interestRate = data.company.credit_interest_rate ?? 24;
+    page.drawText(`4) If the Bill is not paid within ${data.credit_days} days interest @ ${interestRate}% will be charged.`, { x: 23, y: 54, size: 6, font: font });
 
     // Right Box Subdivisions
     page.drawLine({ start: { x: 350, y: 145 }, end: { x: 575, y: 145 }, thickness: 0.5, color: rgb(0,0,0) });

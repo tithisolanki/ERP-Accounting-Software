@@ -20,7 +20,10 @@ export class CompanyService {
   }
 
   async createCompany(user: { id: string; username: string }, body: any): Promise<Company> {
-    const { name, code, gst_number, pan_number, address, phone, email } = body;
+    const {
+      name, code, gst_number, pan_number, address, phone, email,
+      bank1_name, bank1_account_no, bank1_ifsc, bank2_name, bank2_account_no, bank2_ifsc, credit_interest_rate
+    } = body;
     if (!name || !code) {
       throw new Error('Company Name and Code are required.');
     }
@@ -37,20 +40,38 @@ export class CompanyService {
       address,
       phone,
       email,
+      bank1_name: bank1_name || null,
+      bank1_account_no: bank1_account_no || null,
+      bank1_ifsc: bank1_ifsc || null,
+      bank2_name: bank2_name || null,
+      bank2_account_no: bank2_account_no || null,
+      bank2_ifsc: bank2_ifsc || null,
+      credit_interest_rate: Number(credit_interest_rate || 24), // shortcut: can't explicitly set 0%, upgrade if that's ever needed
       updated_at: now
     };
 
     await companyRepository.create(company);
-    
+
     await auditService.log(null, user.id, user.username, 'Company Created', `Created company ${name} (${code})`);
-    
+
     const newCompany = await companyRepository.findById(id);
     if (!newCompany) throw new Error('Failed to retrieve newly created company.');
     return newCompany;
   }
 
   async updateCompany(id: string, user: { id: string; username: string; company_id: string | null }, body: any): Promise<Company> {
-    const { name, gst_number, pan_number, address, phone, email } = body;
+    // Two different forms (Settings.tsx and CompanyMasterPage.tsx) write to this same record,
+    // each only sending the fields it displays, so fall back to the stored value for anything omitted.
+    const existing = await companyRepository.findById(id);
+    if (!existing) throw new Error('Company not found.');
+
+    const {
+      name = existing.name, gst_number = existing.gst_number, pan_number = existing.pan_number,
+      address = existing.address, phone = existing.phone, email = existing.email,
+      bank1_name = existing.bank1_name, bank1_account_no = existing.bank1_account_no, bank1_ifsc = existing.bank1_ifsc,
+      bank2_name = existing.bank2_name, bank2_account_no = existing.bank2_account_no, bank2_ifsc = existing.bank2_ifsc,
+      credit_interest_rate = existing.credit_interest_rate
+    } = body;
     const now = new Date().toISOString();
 
     const company: Company = {
@@ -62,6 +83,13 @@ export class CompanyService {
       address,
       phone,
       email,
+      bank1_name: bank1_name || null,
+      bank1_account_no: bank1_account_no || null,
+      bank1_ifsc: bank1_ifsc || null,
+      bank2_name: bank2_name || null,
+      bank2_account_no: bank2_account_no || null,
+      bank2_ifsc: bank2_ifsc || null,
+      credit_interest_rate: Number(credit_interest_rate || 24),
       updated_at: now
     };
 
