@@ -25,8 +25,10 @@ export class AccVoucherController {
     if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
 
     const { accountId } = req.params;
+    const excludeParam = (req.query.exclude as string) || '';
+    const excludeLineIds = excludeParam.split(',').map((s) => s.trim()).filter(Boolean);
     try {
-      const result = await accVoucherService.getOutstandingBills(companyId, accountId);
+      const result = await accVoucherService.getOutstandingBills(companyId, accountId, excludeLineIds);
       return res.json(result);
     } catch (error: any) {
       return res.status(500).json({ error: error.message });

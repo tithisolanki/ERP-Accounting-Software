@@ -97,21 +97,30 @@ export class AccVoucherRepository {
     );
   }
 
-  /** Bills (sales or purchases) still owing against one account, with what's already been allocated. */
-  async getOutstandingBills(companyId: string, accountId: string): Promise<any[]> {
+  /**
+   * Bills (sales or purchases) still owing against one account, with what's already been allocated.
+   * excludeLineIds: receipt/payment row ids whose own allocations should NOT count against the
+   * balance - pass the voucher currently being edited's own line ids, since its old rows (and their
+   * allocation rows) are deleted and recreated on save. Without this, a bill this same voucher already
+   * fully settled would simply vanish from the picker when re-opening it to edit.
+   */
+  async getOutstandingBills(companyId: string, accountId: string, excludeLineIds: string[] = []): Promise<any[]> {
     const db = await getDb();
+    const excludeClause = excludeLineIds.length ? `AND ra.receipt_id NOT IN (${excludeLineIds.map(() => '?').join(',')})` : '';
+    const excludeClausePa = excludeLineIds.length ? `AND pa.payment_id NOT IN (${excludeLineIds.map(() => '?').join(',')})` : '';
+
     const sales = await db.all(
       `SELECT s.id AS billId, 'sale' AS billType, s.invoice_number AS billNumber, s.date,
               s.total_amount AS totalAmount,
               COALESCE(SUM(ra.amount_applied), 0) + COALESCE(SUM(ra.discount_amount), 0) AS allocated,
               s.total_amount - COALESCE(SUM(ra.amount_applied), 0) - COALESCE(SUM(ra.discount_amount), 0) AS balanceDue
        FROM sales s
-       LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id
+       LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id ${excludeClause}
        WHERE s.company_id = ? AND s.customer_id = ?
        GROUP BY s.id
        HAVING balanceDue > 0.005
        ORDER BY s.date`,
-      [companyId, accountId]
+      [...excludeLineIds, companyId, accountId]
     );
     const purchases = await db.all(
       `SELECT p.id AS billId, 'purchase' AS billType, p.purchase_number AS billNumber, p.date,
@@ -119,14 +128,33 @@ export class AccVoucherRepository {
               COALESCE(SUM(pa.amount_applied), 0) + COALESCE(SUM(pa.discount_amount), 0) AS allocated,
               p.total_amount - COALESCE(SUM(pa.amount_applied), 0) - COALESCE(SUM(pa.discount_amount), 0) AS balanceDue
        FROM purchases p
-       LEFT JOIN payment_allocations pa ON pa.purchase_id = p.id
+       LEFT JOIN payment_allocations pa ON pa.purchase_id = p.id ${excludeClausePa}
        WHERE p.company_id = ? AND p.supplier_id = ?
        GROUP BY p.id
        HAVING balanceDue > 0.005
        ORDER BY p.date`,
-      [companyId, accountId]
+      [...excludeLineIds, companyId, accountId]
     );
     return [...sales, ...purchases].sort((a, b) => (a.date > b.date ? 1 : -1));
+  }
+
+  /** Previously saved bill allocations for a set of receipt/payment row ids, keyed by that row's own id. */
+  async getAllocationsForLines(companyId: string, kind: 'receipt' | 'payment', lineIds: string[]): Promise<{ lineId: string; billId: string; amount: number; discount: number }[]> {
+    if (lineIds.length === 0) return [];
+    const db = await getDb();
+    const placeholders = lineIds.map(() => '?').join(',');
+    if (kind === 'receipt') {
+      return db.all(
+        `SELECT receipt_id AS lineId, sale_id AS billId, amount_applied AS amount, discount_amount AS discount
+         FROM receipt_allocations WHERE company_id = ? AND receipt_id IN (${placeholders})`,
+        [companyId, ...lineIds]
+      );
+    }
+    return db.all(
+      `SELECT payment_id AS lineId, purchase_id AS billId, amount_applied AS amount, discount_amount AS discount
+       FROM payment_allocations WHERE company_id = ? AND payment_id IN (${placeholders})`,
+      [companyId, ...lineIds]
+    );
   }
 
   async createReceiptAllocation(

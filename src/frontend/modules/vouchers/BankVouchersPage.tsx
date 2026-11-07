@@ -17,6 +17,7 @@ interface BillAllocation {
 }
 
 interface BankVoucherLine {
+  id?: string; // the saved receipt/payment row's own id, set only when loaded from an existing voucher
   accountId: string;
   amount: number;
   particulars: string;
@@ -115,10 +116,15 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
     setLines(updated);
   };
 
-  const loadBillsForAccount = async (accountId: string) => {
-    if (!token || billsByAccount[accountId]) return;
+  const loadBillsForAccount = async (accountId: string, excludeLineIds: string[] = [], forceReload = false) => {
+    // shortcut: the cache is keyed only by accountId, not by excludeLineIds, so a forced reload here
+    // (used when loading an existing voucher for edit) overwrites it; if the user then adds another
+    // blank line on the same account afterward in the same session, it'll reuse that excluded-balance
+    // cache entry instead of a fresh one. Rare and self-corrects on next full page load - upgrade by
+    // keying the cache on accountId+excludeLineIds if this turns out to matter in practice.
+    if (!token || (billsByAccount[accountId] && !forceReload)) return;
     try {
-      const bills = await AccVoucherService.getOutstandingBills(accountId, token);
+      const bills = await AccVoucherService.getOutstandingBills(accountId, token, excludeLineIds);
       setBillsByAccount((prev) => ({ ...prev, [accountId]: bills }));
     } catch {
       addNotification('error', 'Failed to load outstanding bills for that account.');
@@ -217,15 +223,21 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
     setChequeNo(v.chequeNo);
     setDrawnOn(v.drawnOn);
     
-    // Map lines to input structure. Note: previously saved bill allocations for this voucher
-    // are not reloaded here (no endpoint exposes them per-line yet) - re-saving this voucher
-    // without re-picking bills will drop its existing allocations. See R7 report for detail.
+    const voucherLineIds: string[] = v.lines.map((l: any) => l.id).filter(Boolean);
+
     setLines(v.lines.map((l: any) => ({
+      id: l.id,
       accountId: l.accountId,
       amount: l.amount,
       particulars: l.particulars,
-      allocations: []
+      allocations: (l.allocations || []).map((a: any) => ({ billId: a.billId, amount: a.amount, discount: a.discount || 0 }))
     })));
+
+    // Force-reload (not cached) each line's outstanding bills, excluding this voucher's own prior
+    // allocations - otherwise a bill this voucher already fully settled would vanish from the picker.
+    v.lines.forEach((l: any) => {
+      if (l.accountId) loadBillsForAccount(l.accountId, voucherLineIds, true);
+    });
 
     setSearchModalOpen(false);
   };

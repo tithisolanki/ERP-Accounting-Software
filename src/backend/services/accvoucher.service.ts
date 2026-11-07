@@ -66,12 +66,32 @@ export class AccVoucherService {
       });
     });
 
+    // Attach each line's previously saved bill allocations, so editing a voucher can reload
+    // what it already settled instead of silently losing it on re-save (delete-then-recreate).
+    const allLineIds = rows.map((item: any) => item.id);
+    const allocationRows = await accVoucherRepository.getAllocationsForLines(companyId, type, allLineIds);
+    const allocationsByLineId = new Map<string, { billId: string; amount: number; discount: number }[]>();
+    allocationRows.forEach((a) => {
+      const list = allocationsByLineId.get(a.lineId) || [];
+      list.push({ billId: a.billId, amount: a.amount, discount: a.discount });
+      allocationsByLineId.set(a.lineId, list);
+    });
+    for (const voucher of groupedMap.values()) {
+      for (const line of voucher.lines) {
+        line.allocations = allocationsByLineId.get(line.id) || [];
+      }
+    }
+
     return Array.from(groupedMap.values());
   }
 
-  /** Outstanding (balance_due > 0) sales/purchase bills for an account, for bill-wise receipt/payment allocation. */
-  async getOutstandingBills(companyId: string, accountId: string): Promise<any[]> {
-    return accVoucherRepository.getOutstandingBills(companyId, accountId);
+  /**
+   * Outstanding (balance_due > 0) sales/purchase bills for an account, for bill-wise receipt/payment
+   * allocation. excludeLineIds: pass the voucher currently being edited's own line ids so its own
+   * prior allocations don't count against the balance (see repository method's doc comment).
+   */
+  async getOutstandingBills(companyId: string, accountId: string, excludeLineIds: string[] = []): Promise<any[]> {
+    return accVoucherRepository.getOutstandingBills(companyId, accountId, excludeLineIds);
   }
 
   async saveVoucher(companyId: string, user: { id: string; username: string }, body: any): Promise<string> {

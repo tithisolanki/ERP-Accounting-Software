@@ -19,8 +19,9 @@ export const AccVoucherService = {
     return apiFetch(`/api/accvoucher/${type}`, token);
   },
 
-  async getOutstandingBills(accountId: string, token: string): Promise<OutstandingBill[]> {
-    return apiFetch(`/api/accvoucher/outstanding/${accountId}`, token);
+  async getOutstandingBills(accountId: string, token: string, excludeLineIds?: string[]): Promise<OutstandingBill[]> {
+    const query = excludeLineIds && excludeLineIds.length ? `?exclude=${excludeLineIds.join(',')}` : '';
+    return apiFetch(`/api/accvoucher/outstanding/${accountId}${query}`, token);
   },
 
   async create(payload: unknown, token: string): Promise<unknown> {
