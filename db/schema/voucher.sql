@@ -193,6 +193,35 @@ CREATE TABLE IF NOT EXISTS receipts (
   FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE RESTRICT
 );
 
+-- Bill-wise allocation: which specific sales/purchase bill(s) a receipt/payment settles.
+-- One row per bill settled by a voucher (a receipt split across 3 invoices = 3 rows), matching
+-- how the legacy AC_PLUS app modeled its "Allocation Entry" save (see AC_PLUS_DATA_FLOW.md).
+CREATE TABLE IF NOT EXISTS receipt_allocations (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  receipt_id TEXT NOT NULL,
+  sale_id TEXT NOT NULL,
+  amount_applied REAL NOT NULL,
+  discount_amount REAL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY(receipt_id) REFERENCES receipts(id) ON DELETE CASCADE,
+  FOREIGN KEY(sale_id) REFERENCES sales(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS payment_allocations (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  payment_id TEXT NOT NULL,
+  purchase_id TEXT NOT NULL,
+  amount_applied REAL NOT NULL,
+  discount_amount REAL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY(payment_id) REFERENCES payments(id) ON DELETE CASCADE,
+  FOREIGN KEY(purchase_id) REFERENCES purchases(id) ON DELETE RESTRICT
+);
+
 CREATE TABLE IF NOT EXISTS delivery_challans (
   id TEXT PRIMARY KEY,
   company_id TEXT NOT NULL,
@@ -289,6 +318,10 @@ CREATE INDEX IF NOT EXISTS idx_purchases_company ON purchases(company_id);
 CREATE INDEX IF NOT EXISTS idx_sales_company ON sales(company_id);
 CREATE INDEX IF NOT EXISTS idx_payments_account ON payments(account_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_account ON receipts(account_id);
+CREATE INDEX IF NOT EXISTS idx_receipt_allocations_receipt ON receipt_allocations(receipt_id);
+CREATE INDEX IF NOT EXISTS idx_receipt_allocations_sale ON receipt_allocations(sale_id);
+CREATE INDEX IF NOT EXISTS idx_payment_allocations_payment ON payment_allocations(payment_id);
+CREATE INDEX IF NOT EXISTS idx_payment_allocations_purchase ON payment_allocations(purchase_id);
 CREATE INDEX IF NOT EXISTS idx_challans_company ON delivery_challans(company_id);
 CREATE INDEX IF NOT EXISTS idx_challans_lookup ON delivery_challans(company_id, challan_number);
 CREATE INDEX IF NOT EXISTS idx_journal_vouchers_lookup ON journal_vouchers(company_id, voucher_no);

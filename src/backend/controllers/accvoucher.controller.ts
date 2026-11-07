@@ -20,6 +20,19 @@ export class AccVoucherController {
     }
   }
 
+  async getOutstandingBills(req: AuthenticatedRequest, res: Response) {
+    const companyId = req.user?.company_id;
+    if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
+
+    const { accountId } = req.params;
+    try {
+      const result = await accVoucherService.getOutstandingBills(companyId, accountId);
+      return res.json(result);
+    } catch (error: any) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   async saveVoucher(req: AuthenticatedRequest, res: Response) {
     const companyId = req.user?.company_id;
     if (!companyId) return res.status(400).json({ error: 'Company scope required.' });

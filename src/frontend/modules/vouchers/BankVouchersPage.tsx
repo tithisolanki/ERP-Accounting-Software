@@ -5,13 +5,22 @@ import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Select } from '../../components/Select';
 import { Modal } from '../../components/Modal';
+import { Table } from '../../components/Table';
 import { AccountService, AccVoucherService } from '../../services/api';
+import type { OutstandingBill } from '../../services/accvoucher.api';
 import { Plus, Trash2, Save, Search } from 'lucide-react';
+
+interface BillAllocation {
+  billId: string;
+  amount: number;
+  discount: number;
+}
 
 interface BankVoucherLine {
   accountId: string;
   amount: number;
   particulars: string;
+  allocations: BillAllocation[];
 }
 
 export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }) => {
@@ -27,8 +36,11 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
 
   // Grid states
   const [lines, setLines] = useState<BankVoucherLine[]>([
-    { accountId: '', amount: 0, particulars: '' }
+    { accountId: '', amount: 0, particulars: '', allocations: [] }
   ]);
+
+  // Bill-wise allocation: outstanding bills per account, fetched on demand and cached.
+  const [billsByAccount, setBillsByAccount] = useState<Record<string, OutstandingBill[]>>({});
 
   // Masters
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -82,12 +94,12 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
 
   // Grid operations
   const handleAddLine = () => {
-    setLines([...lines, { accountId: '', amount: 0, particulars: '' }]);
+    setLines([...lines, { accountId: '', amount: 0, particulars: '', allocations: [] }]);
   };
 
   const handleRemoveLine = (index: number) => {
     if (lines.length === 1) {
-      setLines([{ accountId: '', amount: 0, particulars: '' }]);
+      setLines([{ accountId: '', amount: 0, particulars: '', allocations: [] }]);
       return;
     }
     setLines(lines.filter((_, idx) => idx !== index));
@@ -96,11 +108,38 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
   const handleLineChange = (index: number, field: keyof BankVoucherLine, value: any) => {
     const updated = [...lines];
     updated[index] = { ...updated[index], [field]: value };
+    if (field === 'accountId') {
+      updated[index].allocations = []; // switching account invalidates any bills picked for the old one
+      if (value) loadBillsForAccount(value);
+    }
+    setLines(updated);
+  };
+
+  const loadBillsForAccount = async (accountId: string) => {
+    if (!token || billsByAccount[accountId]) return;
+    try {
+      const bills = await AccVoucherService.getOutstandingBills(accountId, token);
+      setBillsByAccount((prev) => ({ ...prev, [accountId]: bills }));
+    } catch {
+      addNotification('error', 'Failed to load outstanding bills for that account.');
+    }
+  };
+
+  const handleAllocationChange = (lineIndex: number, bill: OutstandingBill, amount: number) => {
+    const updated = [...lines];
+    const line = { ...updated[lineIndex] };
+    const rest = line.allocations.filter((a) => a.billId !== bill.billId);
+    line.allocations = amount > 0 ? [...rest, { billId: bill.billId, amount, discount: 0 }] : rest;
+    updated[lineIndex] = line;
     setLines(updated);
   };
 
   const calculateTotal = () => {
     return lines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
+  };
+
+  const calculateAllocated = (line: BankVoucherLine) => {
+    return line.allocations.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
   };
 
   const handleClear = () => {
@@ -109,7 +148,7 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
     setBalance('0.00');
     setChequeNo('');
     setDrawnOn('');
-    setLines([{ accountId: '', amount: 0, particulars: '' }]);
+    setLines([{ accountId: '', amount: 0, particulars: '', allocations: [] }]);
     setActiveId(null);
     loadNextVoucherNo();
   };
@@ -140,7 +179,12 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
         bankAccountName,
         chequeNo: chequeNo || null,
         drawnOn: drawnOn || null,
-        lines: validLines
+        lines: validLines.map(l => ({
+          accountId: l.accountId,
+          amount: l.amount,
+          particulars: l.particulars,
+          allocations: l.allocations.filter(a => a.amount > 0)
+        }))
       };
 
       await AccVoucherService.create(payload, token!);
@@ -173,11 +217,14 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
     setChequeNo(v.chequeNo);
     setDrawnOn(v.drawnOn);
     
-    // Map lines to input structure
+    // Map lines to input structure. Note: previously saved bill allocations for this voucher
+    // are not reloaded here (no endpoint exposes them per-line yet) - re-saving this voucher
+    // without re-picking bills will drop its existing allocations. See R7 report for detail.
     setLines(v.lines.map((l: any) => ({
       accountId: l.accountId,
       amount: l.amount,
-      particulars: l.particulars
+      particulars: l.particulars,
+      allocations: []
     })));
 
     setSearchModalOpen(false);
@@ -342,6 +389,49 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
                     </td>
                   </tr>
                 ))}
+                {lines.map((line, index) => {
+                  const bills = line.accountId ? billsByAccount[line.accountId] : undefined;
+                  if (!bills || bills.length === 0) return null;
+                  const allocated = calculateAllocated(line);
+                  return (
+                    <tr key={`bills-${index}`} className="border-b border-slate-100 bg-slate-50/40">
+                      <td></td>
+                      <td colSpan={4} className="px-3.5 py-3">
+                        <div className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                          <span>Settle against bill(s) for line {index + 1}</span>
+                          <span className={allocated > line.amount ? 'text-rose-600' : 'text-slate-500'}>
+                            Allocated {allocated.toLocaleString('en-IN', { minimumFractionDigits: 2 })} / Line Amount {Number(line.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <Table headers={['Bill No', 'Date', 'Total', 'Balance Due', 'Apply Amount']}>
+                          {bills.map((bill) => {
+                            const current = line.allocations.find(a => a.billId === bill.billId)?.amount || 0;
+                            return (
+                              <tr key={bill.billId}>
+                                <td className="px-4 py-2 font-semibold">{bill.billNumber}</td>
+                                <td className="px-4 py-2 font-mono">{bill.date}</td>
+                                <td className="px-4 py-2 font-mono text-right">{bill.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td className="px-4 py-2 font-mono text-right">{bill.balanceDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td className="px-4 py-2">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max={bill.balanceDue}
+                                    value={current || ''}
+                                    onChange={(e) => handleAllocationChange(index, bill, Math.min(parseFloat(e.target.value) || 0, bill.balanceDue))}
+                                    placeholder="0.00"
+                                    className="w-28 px-2 py-1 text-xs bg-white border border-slate-200 focus:border-indigo-500 rounded-lg outline-none text-right font-mono"
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </Table>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -1,5 +1,15 @@
 import { apiFetch } from './client';
 
+export interface OutstandingBill {
+  billId: string;
+  billType: 'sale' | 'purchase';
+  billNumber: string | number;
+  date: string;
+  totalAmount: number;
+  allocated: number;
+  balanceDue: number;
+}
+
 export const AccVoucherService = {
   async getJournalVouchers(token: string): Promise<unknown[]> {
     return apiFetch('/api/accvoucher/journal', token);
@@ -7,6 +17,10 @@ export const AccVoucherService = {
 
   async getBankVouchers(type: 'payment' | 'receipt', token: string): Promise<unknown[]> {
     return apiFetch(`/api/accvoucher/${type}`, token);
+  },
+
+  async getOutstandingBills(accountId: string, token: string): Promise<OutstandingBill[]> {
+    return apiFetch(`/api/accvoucher/outstanding/${accountId}`, token);
   },
 
   async create(payload: unknown, token: string): Promise<unknown> {

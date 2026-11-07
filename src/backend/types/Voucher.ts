@@ -26,12 +26,21 @@ export interface Receipt {
   account_name?: string;
 }
 
+export interface BillAllocation {
+  billId: string;
+  amount: number;
+  discount?: number;
+}
+
 export interface BankVoucherLine {
   id?: string;
   accountId: string;
   accountName?: string;
   amount: number;
   particulars: string;
+  // Bill-wise settlement (R7): which sales (receipt) or purchase (payment) bill(s) this line
+  // settles. Optional - on-account receipts/payments with no bill yet are still valid.
+  allocations?: BillAllocation[];
 }
 
 export interface BankVoucher {

@@ -1,5 +1,7 @@
 import React from 'react';
 import { Save } from 'lucide-react';
+import { Table } from '../../../components/Table';
+import type { OutstandingBill } from '../../../services/accvoucher.api';
 
 interface CashVoucherFormProps {
   activeType: 'payment' | 'receipt';
@@ -17,6 +19,10 @@ interface CashVoucherFormProps {
   notes: string;
   setNotes: (val: string) => void;
   handleCashSubmit: (e: React.FormEvent) => void;
+  bills?: OutstandingBill[];
+  allocations?: Record<string, number>;
+  onAllocationChange?: (billId: string, amount: number) => void;
+  voucherAmount?: number;
 }
 
 export const CashVoucherForm: React.FC<CashVoucherFormProps> = ({
@@ -34,8 +40,13 @@ export const CashVoucherForm: React.FC<CashVoucherFormProps> = ({
   setRefNum,
   notes,
   setNotes,
-  handleCashSubmit
+  handleCashSubmit,
+  bills = [],
+  allocations = {},
+  onAllocationChange,
+  voucherAmount = 0
 }) => {
+  const totalAllocated = Object.values(allocations).reduce((sum, v) => sum + (Number(v) || 0), 0);
   return (
     <form onSubmit={handleCashSubmit} className="flex flex-col gap-6 bg-white border border-slate-200 rounded-2xl p-6 max-w-xl mx-auto shadow-sm select-none">
       <h3 className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-3 uppercase tracking-wider">
@@ -110,6 +121,40 @@ export const CashVoucherForm: React.FC<CashVoucherFormProps> = ({
           />
         </div>
       </div>
+
+      {bills.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-slate-100 pt-4">
+          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <span>Settle against outstanding bill(s)</span>
+            <span className={totalAllocated > voucherAmount ? 'text-rose-600' : 'text-slate-500'}>
+              Allocated {totalAllocated.toLocaleString('en-IN', { minimumFractionDigits: 2 })} / Voucher Total {voucherAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <Table headers={['Bill No', 'Date', 'Total', 'Balance Due', 'Apply Amount']}>
+            {bills.map((bill) => (
+              <tr key={bill.billId}>
+                <td className="px-4 py-2 font-semibold">{bill.billNumber}</td>
+                <td className="px-4 py-2 font-mono">{bill.date}</td>
+                <td className="px-4 py-2 font-mono text-right">{bill.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td className="px-4 py-2 font-mono text-right">{bill.balanceDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td className="px-4 py-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={bill.balanceDue}
+                    value={allocations[bill.billId] || ''}
+                    onChange={(e) => onAllocationChange?.(bill.billId, Math.min(parseFloat(e.target.value) || 0, bill.balanceDue))}
+                    placeholder="0.00"
+                    className="w-28 px-2 py-1 text-xs bg-white border border-slate-200 focus:border-indigo-500 rounded-lg outline-none text-right font-mono"
+                  />
+                </td>
+              </tr>
+            ))}
+          </Table>
+        </div>
+      )}
+
       <div className="flex justify-end mt-2">
         <button
           type="submit"
