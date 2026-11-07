@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import { AccountService, AccVoucherService } from '../../services/api';
+import type { OutstandingBill } from '../../services/accvoucher.api';
 import { CashVoucherForm } from './components/CashVoucherForm';
 
 const CASH_ACCOUNT_NAME = 'CASH IN HAND';
@@ -17,6 +18,25 @@ export const CashVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
   const [notes, setNotes] = useState('');
 
   const [accounts, setAccounts] = useState<any[]>([]);
+
+  // Bill-wise allocation: outstanding bills for the selected account, and what the user applies.
+  const [bills, setBills] = useState<OutstandingBill[]>([]);
+  const [allocations, setAllocations] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setAllocations({});
+    if (!token || !selectedAccountId) {
+      setBills([]);
+      return;
+    }
+    AccVoucherService.getOutstandingBills(selectedAccountId, token)
+      .then(setBills)
+      .catch(() => { setBills([]); addNotification('error', 'Failed to load outstanding bills for that account.'); });
+  }, [selectedAccountId, token]);
+
+  const handleAllocationChange = (billId: string, value: number) => {
+    setAllocations((prev) => ({ ...prev, [billId]: value }));
+  };
 
   // Load accounts and calculate next voucher no (same pattern as BankVouchersPage)
   useEffect(() => {
@@ -54,6 +74,8 @@ export const CashVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
     setPaymentMode('Cash');
     setRefNum('');
     setNotes('');
+    setBills([]);
+    setAllocations({});
     loadNextVoucherNo();
   };
 
@@ -81,7 +103,14 @@ export const CashVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
         paymentMode,
         chequeNo: refNum || null,
         drawnOn: null,
-        lines: [{ accountId: selectedAccountId, amount: parsedAmount, particulars: notes }]
+        lines: [{
+          accountId: selectedAccountId,
+          amount: parsedAmount,
+          particulars: notes,
+          allocations: Object.entries(allocations)
+            .filter(([, amt]) => amt > 0)
+            .map(([billId, amt]) => ({ billId, amount: amt, discount: 0 }))
+        }]
       };
 
       await AccVoucherService.create(payload, token!);
@@ -121,6 +150,10 @@ export const CashVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
         notes={notes}
         setNotes={setNotes}
         handleCashSubmit={handleCashSubmit}
+        bills={bills}
+        allocations={allocations}
+        onAllocationChange={handleAllocationChange}
+        voucherAmount={parseFloat(amount) || 0}
       />
     </div>
   );

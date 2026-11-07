@@ -266,6 +266,45 @@ async function ensureSchemaUpdates(db: any) {
       console.warn(`WARNING: duplicate numbers in ${u.table}, unique index not created:`, dupes);
     }
   }
+
+  // 12. Bill-wise receipts/payments (R7): create allocation tables for existing databases
+  // (voucher.sql CREATE TABLE IF NOT EXISTS also covers a fresh DB, this just mirrors that
+  // explicitly for installs where ensureSchemaUpdates is otherwise the documented migration path).
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS receipt_allocations (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        receipt_id TEXT NOT NULL,
+        sale_id TEXT NOT NULL,
+        amount_applied REAL NOT NULL,
+        discount_amount REAL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        FOREIGN KEY(receipt_id) REFERENCES receipts(id) ON DELETE CASCADE,
+        FOREIGN KEY(sale_id) REFERENCES sales(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE IF NOT EXISTS payment_allocations (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        payment_id TEXT NOT NULL,
+        purchase_id TEXT NOT NULL,
+        amount_applied REAL NOT NULL,
+        discount_amount REAL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        FOREIGN KEY(payment_id) REFERENCES payments(id) ON DELETE CASCADE,
+        FOREIGN KEY(purchase_id) REFERENCES purchases(id) ON DELETE RESTRICT
+      );
+      CREATE INDEX IF NOT EXISTS idx_receipt_allocations_receipt ON receipt_allocations(receipt_id);
+      CREATE INDEX IF NOT EXISTS idx_receipt_allocations_sale ON receipt_allocations(sale_id);
+      CREATE INDEX IF NOT EXISTS idx_payment_allocations_payment ON payment_allocations(payment_id);
+      CREATE INDEX IF NOT EXISTS idx_payment_allocations_purchase ON payment_allocations(purchase_id);
+    `);
+    console.log("Ensured receipt_allocations and payment_allocations tables exist.");
+  } catch (e) {
+    console.error("Failed to create bill allocation tables:", e);
+  }
 }
 
 export async function initDb() {

@@ -96,5 +96,59 @@ export class AccVoucherRepository {
       [line.id, line.companyId, line.voucherNo, line.date, line.voucherType, line.accountId, line.debitAmount, line.creditAmount, line.particulars, line.now]
     );
   }
+
+  /** Bills (sales or purchases) still owing against one account, with what's already been allocated. */
+  async getOutstandingBills(companyId: string, accountId: string): Promise<any[]> {
+    const db = await getDb();
+    const sales = await db.all(
+      `SELECT s.id AS billId, 'sale' AS billType, s.invoice_number AS billNumber, s.date,
+              s.total_amount AS totalAmount,
+              COALESCE(SUM(ra.amount_applied), 0) + COALESCE(SUM(ra.discount_amount), 0) AS allocated,
+              s.total_amount - COALESCE(SUM(ra.amount_applied), 0) - COALESCE(SUM(ra.discount_amount), 0) AS balanceDue
+       FROM sales s
+       LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id
+       WHERE s.company_id = ? AND s.customer_id = ?
+       GROUP BY s.id
+       HAVING balanceDue > 0.005
+       ORDER BY s.date`,
+      [companyId, accountId]
+    );
+    const purchases = await db.all(
+      `SELECT p.id AS billId, 'purchase' AS billType, p.purchase_number AS billNumber, p.date,
+              p.total_amount AS totalAmount,
+              COALESCE(SUM(pa.amount_applied), 0) + COALESCE(SUM(pa.discount_amount), 0) AS allocated,
+              p.total_amount - COALESCE(SUM(pa.amount_applied), 0) - COALESCE(SUM(pa.discount_amount), 0) AS balanceDue
+       FROM purchases p
+       LEFT JOIN payment_allocations pa ON pa.purchase_id = p.id
+       WHERE p.company_id = ? AND p.supplier_id = ?
+       GROUP BY p.id
+       HAVING balanceDue > 0.005
+       ORDER BY p.date`,
+      [companyId, accountId]
+    );
+    return [...sales, ...purchases].sort((a, b) => (a.date > b.date ? 1 : -1));
+  }
+
+  async createReceiptAllocation(
+    db: any,
+    alloc: { id: string; companyId: string; receiptId: string; saleId: string; amountApplied: number; discountAmount: number; now: string }
+  ): Promise<void> {
+    await db.run(
+      `INSERT INTO receipt_allocations (id, company_id, receipt_id, sale_id, amount_applied, discount_amount, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [alloc.id, alloc.companyId, alloc.receiptId, alloc.saleId, alloc.amountApplied, alloc.discountAmount, alloc.now]
+    );
+  }
+
+  async createPaymentAllocation(
+    db: any,
+    alloc: { id: string; companyId: string; paymentId: string; purchaseId: string; amountApplied: number; discountAmount: number; now: string }
+  ): Promise<void> {
+    await db.run(
+      `INSERT INTO payment_allocations (id, company_id, payment_id, purchase_id, amount_applied, discount_amount, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [alloc.id, alloc.companyId, alloc.paymentId, alloc.purchaseId, alloc.amountApplied, alloc.discountAmount, alloc.now]
+    );
+  }
 }
 export const accVoucherRepository = new AccVoucherRepository();

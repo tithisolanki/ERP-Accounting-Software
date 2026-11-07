@@ -69,6 +69,11 @@ export class AccVoucherService {
     return Array.from(groupedMap.values());
   }
 
+  /** Outstanding (balance_due > 0) sales/purchase bills for an account, for bill-wise receipt/payment allocation. */
+  async getOutstandingBills(companyId: string, accountId: string): Promise<any[]> {
+    return accVoucherRepository.getOutstandingBills(companyId, accountId);
+  }
+
   async saveVoucher(companyId: string, user: { id: string; username: string }, body: any): Promise<string> {
     const { type, voucherDate, voucherNo, bankAccountName, chequeNo, drawnOn, paymentMode, voucherType, lines, isNew } = body;
 
@@ -150,6 +155,17 @@ export class AccVoucherService {
       if (!line.accountId || !line.amount || Number(line.amount) <= 0) {
         throw new Error('Invalid line item detected. Account and positive amount are required.');
       }
+      for (const alloc of (line.allocations || [])) {
+        if (!alloc.billId || !(Number(alloc.amount) > 0)) {
+          throw new Error('Invalid bill allocation detected. Bill and positive amount are required.');
+        }
+      }
+      const allocatedTotal = (line.allocations || []).reduce(
+        (sum: number, a: any) => sum + Number(a.amount || 0) + Number(a.discount || 0), 0
+      );
+      if (allocatedTotal > Number(line.amount) + 0.01) {
+        throw new Error('Bill allocations for a line cannot exceed that line\'s amount.');
+      }
     }
 
     const tableName = type === 'payment' ? 'payments' : 'receipts';
@@ -163,9 +179,10 @@ export class AccVoucherService {
 
       const now = new Date().toISOString();
       for (const line of lines) {
+        const voucherLineId = crypto.randomUUID();
         const serializedNotes = `[Voucher: ${voucherNo}] [Bank: ${bankAccountName}] [Drawn: ${drawnOn || ''}] ${line.particulars || ''}`.trim();
         await accVoucherRepository.createVoucherLine(db, tableName, {
-          id: crypto.randomUUID(),
+          id: voucherLineId,
           companyId,
           accountId: line.accountId,
           amount: Number(line.amount),
@@ -175,6 +192,31 @@ export class AccVoucherService {
           notes: serializedNotes,
           now
         });
+
+        // Bill-wise allocations are optional: on-account receipts/payments with no bill yet are valid.
+        for (const alloc of (line.allocations || [])) {
+          if (type === 'receipt') {
+            await accVoucherRepository.createReceiptAllocation(db, {
+              id: crypto.randomUUID(),
+              companyId,
+              receiptId: voucherLineId,
+              saleId: alloc.billId,
+              amountApplied: Number(alloc.amount),
+              discountAmount: Number(alloc.discount || 0),
+              now
+            });
+          } else {
+            await accVoucherRepository.createPaymentAllocation(db, {
+              id: crypto.randomUUID(),
+              companyId,
+              paymentId: voucherLineId,
+              purchaseId: alloc.billId,
+              amountApplied: Number(alloc.amount),
+              discountAmount: Number(alloc.discount || 0),
+              now
+            });
+          }
+        }
       }
     });
 
