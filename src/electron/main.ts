@@ -35,10 +35,11 @@ import '../backend/index';
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 1024,
-    minHeight: 768,
+    width: 1366,
+    height: 768,
+    minWidth: 800,
+    minHeight: 600,
+    show: false,
     title: 'TexFin - Ledger',
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.ico'),
     webPreferences: {
@@ -58,6 +59,21 @@ function createWindow() {
     // Load compiled frontend from production dist
     mainWindow.loadFile(path.join(__dirname, '..', '..', 'frontend', 'index.html'));
   }
+
+  // The UI is laid out for 1366px. On narrower windows, scale the whole page down
+  // instead of letting the layout squeeze, so every screen looks the same.
+  const DESIGN_WIDTH = 1366;
+  const fitZoom = () => {
+    if (!mainWindow) return;
+    const { width } = mainWindow.getContentBounds();
+    mainWindow.webContents.setZoomFactor(Math.min(1, width / DESIGN_WIDTH));
+  };
+  mainWindow.on('resize', fitZoom);
+  mainWindow.webContents.on('did-finish-load', fitZoom);
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.maximize();
+    mainWindow?.show();
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;

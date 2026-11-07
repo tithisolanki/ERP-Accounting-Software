@@ -5,7 +5,7 @@
   "main": "dist/src/electron/main.js",
   "author": "Tithi Solanki",
   "scripts": {
-    "dev": "concurrently -n \"vite,tsc,electron\" -c \"blue,yellow,green\" \"vite\" \"tsc -w -p tsconfig.electron.json\" \"nodemon --watch dist/src/electron/main.js --exec electron .\"",
+    "dev": "concurrently -n \"vite,tsc,electron\" -c \"blue,yellow,green\" \"vite\" \"tsc -w -p tsconfig.electron.json\" \"nodemon --watch dist/src --ext js --exec electron .\"",
     "build:frontend": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/copy-assets.js",
     "build": "npm run build:frontend && npm run build:electron",
