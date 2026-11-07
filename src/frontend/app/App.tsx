@@ -103,6 +103,47 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  // Global F-key shortcuts (AC_PLUS muscle memory) - fire regardless of focus
+  useEffect(() => {
+    const handleFKeyShortcuts = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'F2':
+          e.preventDefault();
+          handleTabSwitch('bank_receipt');
+          break;
+        case 'F3':
+          e.preventDefault();
+          handleTabSwitch('cash_receipt');
+          break;
+        case 'F5':
+          e.preventDefault();
+          handleTabSwitch('bank_payment');
+          break;
+        case 'F6':
+          e.preventDefault();
+          handleTabSwitch('cash_payment');
+          break;
+        case 'F7':
+          e.preventDefault();
+          handleTabSwitch('vouchers', 'purchase');
+          break;
+        case 'F8':
+          e.preventDefault();
+          handleTabSwitch('vouchers', 'sale');
+          break;
+        case 'F9':
+          e.preventDefault();
+          handleTabSwitch('vouchers', 'challan');
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleFKeyShortcuts);
+
+    return () => {
+      window.removeEventListener('keydown', handleFKeyShortcuts);
+    };
+  }, []);
+
   // Auto-clear Notifications Stack
   useEffect(() => {
     const unread = store.notifications.filter(n => !n.read);
@@ -778,6 +819,10 @@ export const App: React.FC = () => {
             <p className="mt-3 text-indigo-650 font-black">Designed & Developed by TITHI SOLANKI</p>
             <p className="text-slate-500 font-bold font-mono">Mobile: 7021206907</p>
             <p className="mt-4 text-[11px] text-slate-400 font-bold uppercase tracking-wider">All Rights Reserved by TITHI SOLANKI. 2026.</p>
+          </div>
+          <div className="text-[11px] text-slate-500 font-semibold leading-relaxed border-t border-slate-200 pt-3 w-full">
+            <p className="text-slate-600 font-bold mb-1">Keyboard Shortcuts</p>
+            <p>F2 Cheque Receipt &bull; F3 Cash Receipt &bull; F5 Cheque Payment &bull; F6 Cash Payment &bull; F7 Purchase Bill &bull; F8 Sales Invoice &bull; F9 Delivery Challan</p>
           </div>
           <div className="flex justify-center mt-2 w-full">
             <Button
