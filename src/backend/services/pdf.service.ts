@@ -53,7 +53,6 @@ interface InvoiceData {
     product_name: string;
     hsn_code: string;
     cloth_type: string;
-    lot_number: string;
     pcs: number;
     quantity: number;
     rate: number;
@@ -320,7 +319,7 @@ export async function generateInvoicePdf(data: InvoiceData, copies: string[]): P
       page.drawText(qText, { x: 25, y: itemY, size: 8, font: font });
       
       // 2. Description column (aligned left at x = 105, wrapped)
-      const descText = `${item.product_name}  L.NO:${item.lot_number}`;
+      const descText = item.product_name;
       const descLines = wrapText(descText, 130, 8, font);
       page.drawText(descLines[0] || '', { x: 105, y: itemY, size: 8, font: font });
       
@@ -508,7 +507,6 @@ export interface ChallanData {
     product_name: string;
     hsn_code: string;
     cloth_type: string;
-    lot_number: string;
     pcs: number;
     quantity: number;
     rate: number;
