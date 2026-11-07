@@ -4,7 +4,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { SettingsService } from '../services/api';
-import { Download, Upload, Cloud, Save, Wifi, WifiOff } from 'lucide-react';
+import { Download, Upload, Cloud, Save, Wifi, WifiOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export const BackupRestore: React.FC = () => {
   const { token, addNotification, company, isOnline, syncStatus, syncMessage, setSyncStatus } = useStore();
@@ -14,6 +14,10 @@ export const BackupRestore: React.FC = () => {
   const [supabaseUrl, setSupabaseUrl] = useState('');
   const [supabaseKey, setSupabaseKey] = useState('');
   const [syncing, setSyncing] = useState(false);
+
+  // Automatic backup state (last run + destination folder, both stored as global settings)
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+  const [backupFolderPath, setBackupFolderPath] = useState('');
 
   useEffect(() => {
     fetchSettings();
@@ -25,12 +29,31 @@ export const BackupRestore: React.FC = () => {
       const data = await SettingsService.getAll(token);
       const urlMatch = data.global.find((s) => s.key === 'supabase_url');
       const keyMatch = data.global.find((s) => s.key === 'supabase_key');
+      const lastBackupMatch = data.global.find((s) => s.key === 'last_backup_at');
+      const folderMatch = data.global.find((s) => s.key === 'backup_folder_path');
       if (urlMatch) setSupabaseUrl(urlMatch.value || '');
       if (keyMatch) setSupabaseKey(keyMatch.value || '');
+      if (lastBackupMatch) setLastBackupAt(lastBackupMatch.value || null);
+      if (folderMatch) setBackupFolderPath(folderMatch.value || '');
     } catch {
       addNotification('error', 'Failed to load credentials.');
     }
   };
+
+  const handleSaveBackupFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    try {
+      await SettingsService.save(token, [{ key: 'backup_folder_path', value: backupFolderPath, isGlobal: true }]);
+      addNotification('success', 'Backup folder path updated.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save backup folder.';
+      addNotification('error', message);
+    }
+  };
+
+  const daysSinceBackup = lastBackupAt ? Math.floor((Date.now() - new Date(lastBackupAt).getTime()) / (1000 * 60 * 60 * 24)) : null;
+  const backupIsStale = daysSinceBackup === null || daysSinceBackup > 2;
 
   const handleSaveSyncConfig = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,19 +222,50 @@ export const BackupRestore: React.FC = () => {
           {/* Download Backup */}
           <Card title="Download Database Backup" subtitle="Save a local copy of your accounting transactions">
             <div className="flex flex-col gap-4 py-2">
+              <div className={`flex items-center justify-between border p-3.5 rounded-xl text-xs select-none ${
+                backupIsStale ? 'bg-amber-50 border-amber-150' : 'bg-emerald-50 border-emerald-150'
+              }`}>
+                <span className={`flex items-center font-semibold ${backupIsStale ? 'text-amber-800' : 'text-emerald-800'}`}>
+                  {backupIsStale ? <AlertTriangle className="w-4 h-4 mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                  {daysSinceBackup === null
+                    ? 'Automatic backup: never run yet'
+                    : daysSinceBackup === 0
+                    ? 'Last automatic backup: today'
+                    : `Last automatic backup: ${daysSinceBackup} day${daysSinceBackup === 1 ? '' : 's'} ago`}
+                </span>
+              </div>
+
               <p className="text-slate-500 leading-relaxed font-semibold">
                 This action compiles the offline SQLite database file (.sqlite) into a compressed ZIP archive. Keep this file in a secure location as a cold storage backup.
               </p>
               <div className="flex mt-2">
-                <Button 
-                  type="button" 
-                  variant="primary" 
+                <Button
+                  type="button"
+                  variant="primary"
                   onClick={handleBackupClick}
                   className="cursor-pointer font-bold text-xs py-1.5 px-4 h-9"
                 >
                   <Download className="w-4 h-4 mr-1.5" /> Download ZIP Backup
                 </Button>
               </div>
+
+              <form onSubmit={handleSaveBackupFolder} className="flex items-end gap-3 mt-2 pt-3 border-t border-slate-150">
+                <div className="flex-1">
+                  <Input
+                    label="Automatic Backup Folder"
+                    value={backupFolderPath}
+                    onChange={(e) => setBackupFolderPath(e.target.value)}
+                    placeholder="Defaults to a 'backups' folder next to the database"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  className="cursor-pointer font-bold border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs py-1.5 px-4 h-9"
+                >
+                  <Save className="w-4 h-4 mr-1.5" /> Save Path
+                </Button>
+              </form>
             </div>
           </Card>
 

@@ -13,6 +13,7 @@ import reportsRouter from './routes/reports.routes';
 import settingsRouter from './routes/settings.routes';
 import accvoucherRouter from './routes/accvoucher.routes';
 import openingRouter from './routes/opening.routes';
+import { settingsService } from './services/settings.service';
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -47,6 +48,12 @@ async function startServer() {
     app.listen(Number(port), '127.0.0.1', () => {
       console.log(`TexFin Express API server running on port ${port}`);
     });
+
+    // Daily backup: no cron dependency, just an hourly "is it due yet" check.
+    settingsService.runScheduledBackupIfDue().catch((err) => console.error('Scheduled backup check failed:', err));
+    setInterval(() => {
+      settingsService.runScheduledBackupIfDue().catch((err) => console.error('Scheduled backup check failed:', err));
+    }, 60 * 60 * 1000);
   } catch (error) {
     console.error(error);
   }

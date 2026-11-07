@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { getDb } from '../db/index';
 import { SettingItem, AuditLogItem } from '../types/Settings';
 
@@ -5,6 +6,19 @@ export class SettingsRepository {
   async getGlobalSettings(): Promise<{ key: string; value: string }[]> {
     const db = await getDb();
     return db.all('SELECT key, value FROM settings WHERE company_id IS NULL');
+  }
+
+  async getGlobalSetting(key: string): Promise<string | null> {
+    const db = await getDb();
+    const row = await db.get('SELECT value FROM settings WHERE company_id IS NULL AND key = ?', [key]);
+    return row?.value ?? null;
+  }
+
+  // Scheduled jobs (e.g. the backup timer) have no logged-in user/company context,
+  // so this writes a global setting directly rather than going through saveSettings.
+  async setGlobalSetting(key: string, value: string): Promise<void> {
+    const id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random());
+    await this.upsertSetting(id, null, key, value, new Date().toISOString());
   }
 
   async getCompanySettings(companyId: string): Promise<{ key: string; value: string }[]> {

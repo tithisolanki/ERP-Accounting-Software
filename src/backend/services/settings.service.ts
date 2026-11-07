@@ -41,7 +41,9 @@ export class SettingsService {
     return settingsRepository.getAuditLogs(companyId, 300);
   }
 
-  async createBackup(companyId: string | null, user: { id: string; username: string }): Promise<Buffer> {
+  // Shared by the manual download route and the scheduled backup job, so both
+  // ever zip the live database the same way.
+  private buildBackupZipBuffer(): Buffer {
     const dbPath = process.env.DB_PATH || './DATA.sqlite';
     if (!fs.existsSync(dbPath)) {
       throw new Error('Database file not found.');
@@ -49,7 +51,11 @@ export class SettingsService {
 
     const zip = new AdmZip();
     zip.addLocalFile(dbPath, undefined, 'DATA.sqlite');
-    const zipBuffer = zip.toBuffer();
+    return zip.toBuffer();
+  }
+
+  async createBackup(companyId: string | null, user: { id: string; username: string }): Promise<Buffer> {
+    const zipBuffer = this.buildBackupZipBuffer();
 
     await auditService.log(
       companyId,
@@ -60,6 +66,37 @@ export class SettingsService {
     );
 
     return zipBuffer;
+  }
+
+  // Called on a timer from backend/index.ts. Writes a timestamped zip to the
+  // configured folder (default: a "backups" folder next to the DB file) once
+  // every ~24h, and records last_backup_at so the UI can show a reminder.
+  // shortcut: no retention/rotation of old backup files; revisit if disk usage becomes a problem.
+  async runScheduledBackupIfDue(): Promise<void> {
+    const lastBackupAt = await settingsRepository.getGlobalSetting('last_backup_at');
+    const dayMs = 24 * 60 * 60 * 1000;
+    if (lastBackupAt && Date.now() - new Date(lastBackupAt).getTime() < dayMs) {
+      return;
+    }
+
+    try {
+      const dbPath = path.resolve(process.env.DB_PATH || './DATA.sqlite');
+      const defaultFolder = path.join(path.dirname(dbPath), 'backups');
+      const folder = (await settingsRepository.getGlobalSetting('backup_folder_path')) || defaultFolder;
+
+      fs.mkdirSync(folder, { recursive: true });
+      const zipBuffer = this.buildBackupZipBuffer();
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const destPath = path.join(folder, `texfin_backup_${stamp}.zip`);
+      fs.writeFileSync(destPath, zipBuffer);
+
+      const now = new Date().toISOString();
+      await settingsRepository.setGlobalSetting('last_backup_at', now);
+      await auditService.log(null, 'system', 'system', 'Scheduled Backup', `Automatic backup written to ${destPath}`);
+      console.log(`Scheduled backup written to ${destPath}`);
+    } catch (error: any) {
+      console.error('Scheduled backup failed:', error);
+    }
   }
 
   async restoreBackup(companyId: string | null, user: { id: string; username: string }, zipBuffer: Buffer): Promise<void> {
