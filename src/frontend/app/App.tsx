@@ -9,6 +9,7 @@ import { Settings } from '../pages/Settings';
 import { Modal } from '../components/Modal';
 import { Button } from '../components/Button';
 import { BackupRestore } from '../pages/BackupRestore';
+import { Home } from '../pages/Home';
 import {
   searchTargets,
   navItems,
@@ -177,6 +178,8 @@ export const App: React.FC = () => {
         return <AccountOpeningBalancePage />;
       case 'stock_opening':
         return <StockOpeningBalancePage />;
+      case null:
+        return <Home />;
       default:
         return null;
     }

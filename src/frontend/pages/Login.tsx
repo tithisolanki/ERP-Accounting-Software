@@ -243,7 +243,7 @@ export const Login: React.FC = () => {
             <img src={logo} alt="TexFin Logo" className="w-20 h-20 shadow-md" />
             <div>
               <h1 className="font-black text-slate-100 text-lg tracking-wide leading-none">TexFin</h1>
-              <p className="text-[11px] text-slate-500 font-extrabold tracking-wider uppercase mt-1">Multiuser Accounting System</p>
+              <p className="text-[11px] text-slate-500 font-extrabold tracking-wider uppercase mt-1">Textile Trading Accounting System</p>
             </div>
           </div>
 
@@ -268,24 +268,6 @@ export const Login: React.FC = () => {
                 <div key={idx} className="flex items-center gap-2.5 text-xs font-bold text-slate-300 hover:text-white transition-colors duration-200">
                   <span className="text-emerald-500 font-extrabold">✓</span>
                   <span>{item}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Animated Stats */}
-            <div className="grid grid-cols-3 gap-3 w-full">
-              {[
-                { value: '99.9%', label: 'Uptime SLA', color: 'text-emerald-400', bg: 'bg-emerald-500/5 border-emerald-500/10' },
-                { value: '256-bit', label: 'Encryption', color: 'text-indigo-400', bg: 'bg-indigo-500/5 border-indigo-500/10' },
-                { value: '10K+', label: 'Txns / Day', color: 'text-blue-400', bg: 'bg-blue-500/5 border-blue-500/10' }
-              ].map((stat, idx) => (
-                <div 
-                  key={idx} 
-                  className={`flex flex-col p-3 rounded-xl border ${stat.bg} backdrop-blur-sm transition-all hover:scale-105 duration-300 animate-pulse-scale`}
-                  style={{ animationDelay: `${idx * 150}ms` }}
-                >
-                  <span className={`text-[15px] font-black ${stat.color} font-mono tracking-tight`}>{stat.value}</span>
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">{stat.label}</span>
                 </div>
               ))}
             </div>
