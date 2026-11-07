@@ -10,3 +10,4 @@ test.sqlite
 Thumbs.db
 *.log
 .vscode/settings.json
+.backups/
