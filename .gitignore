@@ -1,0 +1,12 @@
+node_modules/
+dist/
+release/
+*.sqlite
+*.sqlite-journal
+test.sqlite
+.env
+.env.local
+.DS_Store
+Thumbs.db
+*.log
+.vscode/settings.json

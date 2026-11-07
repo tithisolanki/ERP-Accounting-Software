@@ -1,0 +1,1 @@
+export { GroupMasterPage } from './GroupMasterPage';

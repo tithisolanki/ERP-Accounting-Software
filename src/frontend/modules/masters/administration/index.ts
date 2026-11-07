@@ -1,0 +1,1 @@
+export { AdministrationMasterPage } from './AdministrationMasterPage';

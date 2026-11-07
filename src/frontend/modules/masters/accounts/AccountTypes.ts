@@ -1,0 +1,30 @@
+export interface AccountFormValues {
+  name: string;
+  gst_number: string;
+  group_name: string;
+  contact_person: string;
+  mobile_number: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  opening_balance: number;
+  pin_code: string;
+  dist_taluka: string;
+  telephone_no: string;
+  email: string;
+  credit_days: number;
+  pan_no: string;
+  vat_tin_no: string;
+  cst_tin_no: string;
+  account_type: string;
+  broker: string;
+  tds_rate: number;
+  tds_ledger: string;
+  bank_name: string;
+  bank_branch: string;
+  bank_account_no: string;
+  bank_ifsc: string;
+  bank_account_holder: string;
+  print_order: string;
+}
