@@ -15,6 +15,11 @@ router.get('/dashboard', authenticateJWT, (req, res) => reportsController.getDas
 router.get('/ledger/:accountId', authenticateJWT, (req, res) => reportsController.getAccountLedger(req, res));
 
 // ==========================================
+// 2b. Accounts under one primary group (e.g. for the P&L closing account picker)
+// ==========================================
+router.get('/accounts-by-group', authenticateJWT, (req, res) => reportsController.getAccountsByGroup(req, res));
+
+// ==========================================
 // 3. GST Summary Report
 // ==========================================
 router.get('/gst', authenticateJWT, (req, res) => reportsController.getGstReport(req, res));

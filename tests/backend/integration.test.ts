@@ -219,6 +219,9 @@ async function runTests() {
     const reloaded = await db.get('SELECT pnl_closing_account_id FROM companies WHERE id = ?', [company.id]);
     check('pnl_closing_account_id reloaded from DB', reloaded.pnl_closing_account_id === customer.id);
 
+    const capitalAccounts = await reportsService.getAccountsByPrimaryGroup(company.id, 'Sundry Debtors');
+    check('Accounts-by-group returns the seeded debtor', capitalAccounts.some((a: any) => a.id === customer.id));
+
     await closeDb();
     console.log('\nDatabase closed.');
 

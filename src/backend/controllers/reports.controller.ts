@@ -30,6 +30,20 @@ export class ReportsController {
     }
   }
 
+  async getAccountsByGroup(req: AuthenticatedRequest, res: Response) {
+    const companyId = req.user?.company_id;
+    const name = req.query.name as string;
+    if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
+    if (!name) return res.status(400).json({ error: 'Primary group name required.' });
+
+    try {
+      const result = await reportsService.getAccountsByPrimaryGroup(companyId, name);
+      return res.json(result);
+    } catch (error: any) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   async getGstReport(req: AuthenticatedRequest, res: Response) {
     const companyId = req.user?.company_id;
     if (!companyId) return res.status(400).json({ error: 'Company scope required.' });

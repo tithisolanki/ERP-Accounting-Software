@@ -5,7 +5,9 @@ import { generateInvoicePdf, generateChallanPdf } from './pdf.service';
 import { generateExcelBuffer } from './excel.service';
 
 /** Primary groups whose balance is normally on the credit side. */
-const CREDIT_NATURE_GROUPS = ['Sundry Creditors', 'Capital Account', 'Direct Income', 'Indirect Income', 'Duties & Taxes'];
+// The last six come from AC_PLUS imports (scripts/acplus).
+const CREDIT_NATURE_GROUPS = ['Sundry Creditors', 'Capital Account', 'Direct Income', 'Indirect Income', 'Duties & Taxes',
+  'Sales', 'Secured Loans', 'Unsecured Loans', 'Bank OverDraft', 'Current Liabilities', 'Other Liabilities'];
 
 export class ReportsService {
   async getDashboardSummary(companyId: string | null, isSuperAdmin: boolean) {
@@ -40,6 +42,10 @@ export class ReportsService {
       monthlyPurchases: monthlyPurchases.reverse(),
       recentActivities: recentLogs
     };
+  }
+
+  async getAccountsByPrimaryGroup(companyId: string, primaryGroupName: string) {
+    return reportsRepository.getAccountsByPrimaryGroup(companyId, primaryGroupName);
   }
 
   /**

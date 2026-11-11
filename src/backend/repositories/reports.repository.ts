@@ -194,6 +194,18 @@ export class ReportsRepository {
     `, [companyId]);
   }
 
+  async getAccountsByPrimaryGroup(companyId: string, primaryGroupName: string): Promise<{ id: string; name: string }[]> {
+    const db = await getDb();
+    return db.all(`
+      SELECT a.id, a.name
+      FROM accounts a
+      LEFT JOIN groups g ON a.group_name = g.name AND g.company_id = a.company_id
+      LEFT JOIN primary_groups pg ON g.primary_group_id = pg.id
+      WHERE a.company_id = ? AND pg.name = ?
+      ORDER BY a.name ASC
+    `, [companyId, primaryGroupName]);
+  }
+
   async getAccountWithPrimaryGroup(companyId: string, accountId: string): Promise<any | null> {
     const db = await getDb();
     const row = await db.get(`

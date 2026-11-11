@@ -26,5 +26,9 @@ export const ReportsService = {
   ): Promise<any[]> {
     const query = new URLSearchParams(filters).toString();
     return apiFetch(`/api/reports/trial-balance?${query}`, token);
+  },
+
+  async getAccountsByGroup(token: string, name: string): Promise<{ id: string; name: string }[]> {
+    return apiFetch(`/api/reports/accounts-by-group?name=${encodeURIComponent(name)}`, token);
   }
 };
