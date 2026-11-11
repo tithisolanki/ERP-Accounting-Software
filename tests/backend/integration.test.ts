@@ -3,6 +3,7 @@ import { reportsService } from '../../src/backend/services/reports.service';
 import { salesService } from '../../src/backend/services/sales.service';
 import { accVoucherService } from '../../src/backend/services/accvoucher.service';
 import { receiptService } from '../../src/backend/services/cashflow.service';
+import { companyService } from '../../src/backend/services/masters.service';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -188,6 +189,11 @@ async function runTests() {
     console.log('\nTest 9: Duplicate invoice number is rejected, next number is MAX + 1...');
     check('Duplicate 5001 rejected', await rejects(() => salesService.createSale(company.id, actor, saleBody(5001)), 'already exists'));
     check('Next invoice number = 5002', (await salesService.getNextInvoiceNumber(company.id)) === '5002');
+    await salesService.createSale(company.id, actor, saleBody(9001, { date: '2025-06-10', financialYear: '2025-26' }));
+    check('Next number counts only the chosen year', (await salesService.getNextInvoiceNumber(company.id, '2026-27')) === '5002');
+    check('Find by number picks the chosen year',
+      (await salesService.findSaleByNumber(company.id, 9001, '2025-26')).financial_year === '2025-26'
+      && await rejects(() => salesService.findSaleByNumber(company.id, 9001, '2026-27'), 'not found'));
 
     console.log('\nTest 10: A failed save does not undo other writes made at the same time...');
     const results = await Promise.allSettled([
@@ -206,6 +212,12 @@ async function runTests() {
     const dash = await reportsService.getDashboardSummary(company.id, false);
     check('Dashboard returns numbers', typeof dash.totalStock === 'number' && dash.outstandingReceivables > 0,
       JSON.stringify({ stock: dash.totalStock, recv: dash.outstandingReceivables }));
+
+    console.log('\nTest 12: Company stores its P&L closing account.');
+    const updated = await companyService.updateCompany(company.id, { ...actor, company_id: company.id }, { pnl_closing_account_id: customer.id });
+    check('pnl_closing_account_id persisted', updated.pnl_closing_account_id === customer.id);
+    const reloaded = await db.get('SELECT pnl_closing_account_id FROM companies WHERE id = ?', [company.id]);
+    check('pnl_closing_account_id reloaded from DB', reloaded.pnl_closing_account_id === customer.id);
 
     await closeDb();
     console.log('\nDatabase closed.');

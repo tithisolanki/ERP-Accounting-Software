@@ -70,7 +70,8 @@ export class CompanyService {
       address = existing.address, phone = existing.phone, email = existing.email,
       bank1_name = existing.bank1_name, bank1_account_no = existing.bank1_account_no, bank1_ifsc = existing.bank1_ifsc,
       bank2_name = existing.bank2_name, bank2_account_no = existing.bank2_account_no, bank2_ifsc = existing.bank2_ifsc,
-      credit_interest_rate = existing.credit_interest_rate
+      credit_interest_rate = existing.credit_interest_rate,
+      pnl_closing_account_id = existing.pnl_closing_account_id
     } = body;
     const now = new Date().toISOString();
 
@@ -90,6 +91,7 @@ export class CompanyService {
       bank2_account_no: bank2_account_no || null,
       bank2_ifsc: bank2_ifsc || null,
       credit_interest_rate: Number(credit_interest_rate || 24),
+      pnl_closing_account_id: pnl_closing_account_id || null,
       updated_at: now
     };
 

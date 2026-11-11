@@ -14,6 +14,7 @@ export interface Company {
   bank2_account_no?: string | null;
   bank2_ifsc?: string | null;
   credit_interest_rate?: number | null;
+  pnl_closing_account_id?: string | null;
   is_dirty?: number;
   updated_at?: string;
 }

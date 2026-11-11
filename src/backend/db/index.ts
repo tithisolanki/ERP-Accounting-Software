@@ -247,6 +247,20 @@ async function ensureSchemaUpdates(db: any) {
     }
   }
 
+  // 10b. Add the P&L closing (Capital) account column to companies if missing.
+  // Kept as its own guarded step (not folded into step 10's block) because an
+  // already-migrated install has bank1_account_no already, which would otherwise
+  // skip this column forever.
+  const companyCols2 = await db.all("PRAGMA table_info(companies)");
+  if (companyCols2.length > 0 && !companyCols2.some((c: any) => c.name === 'pnl_closing_account_id')) {
+    try {
+      await db.exec("ALTER TABLE companies ADD COLUMN pnl_closing_account_id TEXT");
+      console.log("Added pnl_closing_account_id column to companies.");
+    } catch (e) {
+      console.error("Failed to add pnl_closing_account_id column to companies:", e);
+    }
+  }
+
   // 11. One document number per company per financial year.
   // If an old database already has duplicates, the index cannot be built: we log which
   // ones so the owner can renumber them (see RUNBOOK.md), and the app checks in code anyway.
