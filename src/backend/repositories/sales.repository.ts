@@ -42,20 +42,22 @@ export class SalesRepository {
     `, [param]);
   }
 
-  async findMaxInvoiceNumber(companyId: string): Promise<number> {
+  /** Highest number in one financial year (all years when none is given). */
+  async findMaxInvoiceNumber(companyId: string, financialYear?: string): Promise<number> {
     const db = await getDb();
-    const row = await db.get('SELECT MAX(invoice_number) as maxNo FROM sales WHERE company_id = ?', [companyId]);
+    const row = await db.get('SELECT MAX(invoice_number) as maxNo FROM sales WHERE company_id = ? AND (? IS NULL OR financial_year = ?)', [companyId, financialYear || null, financialYear || null]);
     return Number(row?.maxNo || 0);
   }
 
-  async findSaleByNumber(companyId: string, number: any): Promise<SalesInvoice | null> {
+  async findSaleByNumber(companyId: string, number: any, financialYear?: string): Promise<SalesInvoice | null> {
     const db = await getDb();
     const sale = await db.get(
       `SELECT s.*, pt.name as customer_name 
        FROM sales s 
        JOIN accounts pt ON s.customer_id = pt.id 
-       WHERE s.company_id = ? AND s.invoice_number = ?`,
-      [companyId, number]
+       WHERE s.company_id = ? AND s.invoice_number = ? AND (? IS NULL OR s.financial_year = ?)
+       ORDER BY s.date DESC`,
+      [companyId, number, financialYear || null, financialYear || null]
     );
     return sale || null;
   }

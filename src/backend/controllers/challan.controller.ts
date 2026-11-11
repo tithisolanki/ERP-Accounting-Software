@@ -20,7 +20,7 @@ export class ChallanController {
     if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
 
     try {
-      const nextNum = await challanService.getNextChallanNumber(companyId);
+      const nextNum = await challanService.getNextChallanNumber(companyId, req.query.fy as string | undefined);
       return res.json({ nextNumber: nextNum });
     } catch (error: any) {
       return res.status(500).json({ error: error.message });
@@ -34,7 +34,7 @@ export class ChallanController {
     if (!number) return res.status(400).json({ error: 'Challan number parameter required.' });
 
     try {
-      const result = await challanService.findChallanByNumber(companyId, number);
+      const result = await challanService.findChallanByNumber(companyId, number, req.query.fy as string | undefined);
       return res.json(result);
     } catch (error: any) {
       const status = error.message === 'Delivery Challan not found.' ? 404 : 500;

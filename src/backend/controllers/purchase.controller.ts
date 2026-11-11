@@ -20,7 +20,7 @@ export class PurchaseController {
     if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
 
     try {
-      const nextNum = await purchaseService.getNextPurchaseNumber(companyId);
+      const nextNum = await purchaseService.getNextPurchaseNumber(companyId, req.query.fy as string | undefined);
       return res.json({ nextNumber: nextNum });
     } catch (error: any) {
       return res.status(500).json({ error: error.message });
@@ -34,7 +34,7 @@ export class PurchaseController {
     if (!number) return res.status(400).json({ error: 'Bill number parameter required.' });
 
     try {
-      const result = await purchaseService.findPurchaseByNumber(companyId, number);
+      const result = await purchaseService.findPurchaseByNumber(companyId, number, req.query.fy as string | undefined);
       return res.json(result);
     } catch (error: any) {
       const status = error.message === 'Purchase bill not found.' ? 404 : 500;

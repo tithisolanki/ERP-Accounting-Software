@@ -123,12 +123,12 @@ export class PurchaseService {
     return purchases;
   }
 
-  async getNextPurchaseNumber(companyId: string): Promise<string> {
-    return String((await purchaseRepository.findMaxEntryNo(companyId)) + 1);
+  async getNextPurchaseNumber(companyId: string, financialYear?: string): Promise<string> {
+    return String((await purchaseRepository.findMaxEntryNo(companyId, financialYear)) + 1);
   }
 
-  async findPurchaseByNumber(companyId: string, number: any): Promise<Purchase> {
-    const purchase = await purchaseRepository.findPurchaseByNumber(companyId, number);
+  async findPurchaseByNumber(companyId: string, number: any, financialYear?: string): Promise<Purchase> {
+    const purchase = await purchaseRepository.findPurchaseByNumber(companyId, number, financialYear);
     if (!purchase) {
       throw new Error('Purchase bill not found.');
     }

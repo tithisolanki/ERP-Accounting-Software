@@ -102,12 +102,12 @@ export class ChallanService {
     return challans;
   }
 
-  async getNextChallanNumber(companyId: string): Promise<string> {
-    return String((await challanRepository.findMaxChallanNumber(companyId)) + 1);
+  async getNextChallanNumber(companyId: string, financialYear?: string): Promise<string> {
+    return String((await challanRepository.findMaxChallanNumber(companyId, financialYear)) + 1);
   }
 
-  async findChallanByNumber(companyId: string, number: any): Promise<DeliveryChallan> {
-    const challan = await challanRepository.findChallanByNumber(companyId, number);
+  async findChallanByNumber(companyId: string, number: any, financialYear?: string): Promise<DeliveryChallan> {
+    const challan = await challanRepository.findChallanByNumber(companyId, number, financialYear);
     if (!challan) {
       throw new Error('Delivery Challan not found.');
     }

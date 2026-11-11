@@ -210,11 +210,11 @@ export const Login: React.FC = () => {
     }
   };
 
-  const years = [
-    { value: '2025-26', label: '2025-2026' },
-    { value: '2026-27', label: '2026-2027' },
-    { value: '2027-28', label: '2027-2028' }
-  ];
+  // Every year from 2016-17 (the oldest AC_PLUS data) to next year, newest first.
+  const years = Array.from({ length: new Date().getFullYear() - 2016 + 2 }, (_, i) => {
+    const y = new Date().getFullYear() + 1 - i;
+    return { value: `${y}-${String(y + 1).slice(2)}`, label: `${y}-${y + 1}` };
+  });
 
   return (
     <div className="min-h-screen w-full relative flex font-sans overflow-hidden bg-slate-950 select-none">

@@ -134,7 +134,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
 
     const autoFetchLinkedChallan = async () => {
       try {
-        const data = await TransactionsService.findChallanByNumber(docNumber, token!) as Record<string, unknown> & {
+        const data = await TransactionsService.findChallanByNumber(docNumber, token!, financialYear) as Record<string, unknown> & {
           items: Record<string, unknown>[];
           challan_number: string;
           date: string;
@@ -274,7 +274,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
     try {
 
 
-      const data = await TransactionsService.getNextNumber(activeType, token!);
+      const data = await TransactionsService.getNextNumber(activeType, token!, financialYear);
       setDocNumber(String(data.nextNumber));
     } catch (err) {
       console.error('Failed to load next number:', err);
@@ -290,7 +290,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
     try {
 
 
-      const data = await TransactionsService.findByNumber(activeType, docNumber, token!);
+      const data = await TransactionsService.findByNumber(activeType, docNumber, token!, financialYear);
       loadVoucherIntoForm(data);
       addNotification('success', `${activeType.toUpperCase()} voucher ${docNumber} loaded.`);
     } catch (err: any) {
@@ -429,7 +429,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
       return;
     }
     try {
-      const data = await TransactionsService.findChallanByNumber(challanNo, token!) as Record<string, unknown> & {
+      const data = await TransactionsService.findChallanByNumber(challanNo, token!, financialYear) as Record<string, unknown> & {
         items: Record<string, unknown>[];
         date: string;
         broker_name?: string;

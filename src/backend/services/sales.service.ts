@@ -126,12 +126,12 @@ export class SalesService {
     return sales;
   }
 
-  async getNextInvoiceNumber(companyId: string): Promise<string> {
-    return String((await salesRepository.findMaxInvoiceNumber(companyId)) + 1);
+  async getNextInvoiceNumber(companyId: string, financialYear?: string): Promise<string> {
+    return String((await salesRepository.findMaxInvoiceNumber(companyId, financialYear)) + 1);
   }
 
-  async findSaleByNumber(companyId: string, number: any): Promise<SalesInvoice> {
-    const sale = await salesRepository.findSaleByNumber(companyId, number);
+  async findSaleByNumber(companyId: string, number: any, financialYear?: string): Promise<SalesInvoice> {
+    const sale = await salesRepository.findSaleByNumber(companyId, number, financialYear);
     if (!sale) {
       throw new Error('Sales invoice not found.');
     }

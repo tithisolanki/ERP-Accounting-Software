@@ -42,20 +42,22 @@ export class ChallanRepository {
     `, [param]);
   }
 
-  async findMaxChallanNumber(companyId: string): Promise<number> {
+  /** Highest number in one financial year (all years when none is given). */
+  async findMaxChallanNumber(companyId: string, financialYear?: string): Promise<number> {
     const db = await getDb();
-    const row = await db.get('SELECT MAX(challan_number) as maxNo FROM delivery_challans WHERE company_id = ?', [companyId]);
+    const row = await db.get('SELECT MAX(challan_number) as maxNo FROM delivery_challans WHERE company_id = ? AND (? IS NULL OR financial_year = ?)', [companyId, financialYear || null, financialYear || null]);
     return Number(row?.maxNo || 0);
   }
 
-  async findChallanByNumber(companyId: string, number: any): Promise<DeliveryChallan | null> {
+  async findChallanByNumber(companyId: string, number: any, financialYear?: string): Promise<DeliveryChallan | null> {
     const db = await getDb();
     const challan = await db.get(
       `SELECT c.*, pt.name as customer_name 
        FROM delivery_challans c 
        JOIN accounts pt ON c.customer_id = pt.id 
-       WHERE c.company_id = ? AND c.challan_number = ?`,
-      [companyId, number]
+       WHERE c.company_id = ? AND c.challan_number = ? AND (? IS NULL OR c.financial_year = ?)
+       ORDER BY c.date DESC`,
+      [companyId, number, financialYear || null, financialYear || null]
     );
     return challan || null;
   }

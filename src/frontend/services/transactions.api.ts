@@ -26,20 +26,20 @@ export const TransactionsService = {
     return apiFetch(`/api/transactions/${endpointFor(type)}`, token);
   },
 
-  async getNextNumber(type: VoucherType, token: string): Promise<{ nextNumber: number | string }> {
-    return apiFetch(`/api/transactions/${endpointFor(type)}/next-number`, token);
+  async getNextNumber(type: VoucherType, token: string, financialYear: string): Promise<{ nextNumber: number | string }> {
+    return apiFetch(`/api/transactions/${endpointFor(type)}/next-number?fy=${encodeURIComponent(financialYear)}`, token);
   },
 
-  async findByNumber(type: VoucherType, number: string, token: string): Promise<unknown> {
+  async findByNumber(type: VoucherType, number: string, token: string, financialYear: string): Promise<unknown> {
     return apiFetch(
-      `/api/transactions/${endpointFor(type)}/find?number=${encodeURIComponent(number)}`,
+      `/api/transactions/${endpointFor(type)}/find?number=${encodeURIComponent(number)}&fy=${encodeURIComponent(financialYear)}`,
       token
     );
   },
 
-  async findChallanByNumber(number: string, token: string): Promise<unknown> {
+  async findChallanByNumber(number: string, token: string, financialYear: string): Promise<unknown> {
     return apiFetch(
-      `/api/transactions/challans/find?number=${encodeURIComponent(number)}`,
+      `/api/transactions/challans/find?number=${encodeURIComponent(number)}&fy=${encodeURIComponent(financialYear)}`,
       token
     );
   },

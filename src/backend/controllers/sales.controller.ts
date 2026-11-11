@@ -20,7 +20,7 @@ export class SalesController {
     if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
 
     try {
-      const nextNum = await salesService.getNextInvoiceNumber(companyId);
+      const nextNum = await salesService.getNextInvoiceNumber(companyId, req.query.fy as string | undefined);
       return res.json({ nextNumber: nextNum });
     } catch (error: any) {
       return res.status(500).json({ error: error.message });
@@ -34,7 +34,7 @@ export class SalesController {
     if (!number) return res.status(400).json({ error: 'Invoice number parameter required.' });
 
     try {
-      const result = await salesService.findSaleByNumber(companyId, number);
+      const result = await salesService.findSaleByNumber(companyId, number, req.query.fy as string | undefined);
       return res.json(result);
     } catch (error: any) {
       const status = error.message === 'Sales invoice not found.' ? 404 : 500;

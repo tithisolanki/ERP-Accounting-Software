@@ -42,20 +42,22 @@ export class PurchaseRepository {
     `, [param]);
   }
 
-  async findMaxEntryNo(companyId: string): Promise<number> {
+  /** Highest number in one financial year (all years when none is given). */
+  async findMaxEntryNo(companyId: string, financialYear?: string): Promise<number> {
     const db = await getDb();
-    const row = await db.get('SELECT MAX(entry_no) as maxNo FROM purchases WHERE company_id = ?', [companyId]);
+    const row = await db.get('SELECT MAX(entry_no) as maxNo FROM purchases WHERE company_id = ? AND (? IS NULL OR financial_year = ?)', [companyId, financialYear || null, financialYear || null]);
     return Number(row?.maxNo || 0);
   }
 
-  async findPurchaseByNumber(companyId: string, number: any): Promise<Purchase | null> {
+  async findPurchaseByNumber(companyId: string, number: any, financialYear?: string): Promise<Purchase | null> {
     const db = await getDb();
     const purchase = await db.get(
       `SELECT p.*, pt.name as supplier_name 
        FROM purchases p 
        JOIN accounts pt ON p.supplier_id = pt.id 
-       WHERE p.company_id = ? AND p.entry_no = ?`,
-      [companyId, number]
+       WHERE p.company_id = ? AND p.entry_no = ? AND (? IS NULL OR p.financial_year = ?)
+       ORDER BY p.date DESC`,
+      [companyId, number, financialYear || null, financialYear || null]
     );
     return purchase || null;
   }
