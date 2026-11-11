@@ -543,6 +543,12 @@ export class ReportsService {
     }
 
     const { start, end } = parseFinancialYear(financialYear);
+    const voucherNo = `CLOSE-${financialYear}`;
+    // Delete any prior closing voucher BEFORE measuring this FY's movement: its reversal lines
+    // are dated inside this same FY range, so leaving them in place would make a re-close see
+    // its own previous output and compute a wrong (already-neutralized) net movement.
+    await withTransaction(db => accVoucherRepository.deleteJournalVouchersByNo(db, companyId, voucherNo));
+
     const movements = await this.getTrialBalance(companyId, start, end, 'without_opening');
     const pnlRows = movements.filter(r => PNL_GROUPS.includes(r.primaryGroupName));
     const realRows = pnlRows.filter(r => !r.id.startsWith('VIRTUAL_'));
@@ -567,20 +573,18 @@ export class ReportsService {
       });
     }
 
-    const voucherNo = `CLOSE-${financialYear}`;
     if (lines.length > 0) {
       await accVoucherService.saveVoucher(companyId, user, {
         type: 'journal', voucherDate: end, voucherNo, voucherType: 'Books Closing', isNew: false, lines
       });
-    } else {
-      await withTransaction(db => accVoucherRepository.deleteJournalVouchersByNo(db, companyId, voucherNo));
     }
+    // Zero net movement (lines.length === 0): the prior voucher was already deleted above, nothing to repost.
 
     return {
       voucherNo,
       netProfitLoss,
       closedAccounts: realRows.map(r => ({ name: r.name, amount: r.credit - r.debit })),
-      skippedAccounts: [] as { name: string; amount: number }[]
+      skippedAccounts: virtualRows.map(r => ({ name: r.name, amount: r.credit - r.debit }))
     };
   }
 }

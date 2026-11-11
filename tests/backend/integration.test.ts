@@ -283,6 +283,32 @@ async function runTests() {
     const salesRowNextFy = nextFyMovement.find(r => r.id === salesAccountId)!;
     check("Next FY's Sales Account posting is untouched by this year's close", salesRowNextFy.credit === 500 && salesRowNextFy.debit === 0);
 
+    console.log('\nTest 14: Re-close replaces the prior closing voucher; unmatched account names are skipped...');
+
+    // A sale whose credit_account matches no real account by name — becomes a 'virtual' PNL row.
+    await salesService.createSale(company.id, actor, saleBody(9101, {
+      date: '2026-06-05', financialYear: '2026-27', creditAccount: 'UNMATCHED REVENUE'
+    }));
+
+    const closeResult2 = await reportsService.closeFinancialYear(company.id, actor, '2026-27');
+    check('Unmatched sales credit account reported as skipped, not silently dropped',
+      closeResult2.skippedAccounts.some((s: any) => s.name.toUpperCase() === 'UNMATCHED REVENUE' && s.amount > 0),
+      JSON.stringify(closeResult2.skippedAccounts));
+
+    const closingVoucherRows2 = await db.all('SELECT * FROM journal_vouchers WHERE company_id = ? AND voucher_no = ?', [company.id, 'CLOSE-2026-27']);
+    check('Still exactly one closing voucher after re-close', new Set(closingVoucherRows2.map((r: any) => r.voucher_no)).size === 1);
+    const closingTotalDr2 = closingVoucherRows2.reduce((s: number, r: any) => s + r.debit_amount, 0);
+    const closingTotalCr2 = closingVoucherRows2.reduce((s: number, r: any) => s + r.credit_amount, 0);
+    check('Re-closed voucher still balances (skipped amount excluded)', Math.abs(closingTotalDr2 - closingTotalCr2) < 0.01);
+    check('Re-close recomputed the same net profit (unmatched account excluded from the total)',
+      closeResult2.netProfitLoss === closeResult.netProfitLoss, String(closeResult2.netProfitLoss));
+
+    // A year with no P&L postings at all must close cleanly with no stale voucher left behind.
+    const emptyCloseResult = await reportsService.closeFinancialYear(company.id, actor, '2030-31');
+    check('Zero-movement year reports zero net profit/loss', emptyCloseResult.netProfitLoss === 0);
+    const emptyVoucherRows = await db.all('SELECT * FROM journal_vouchers WHERE company_id = ? AND voucher_no = ?', [company.id, 'CLOSE-2030-31']);
+    check('No voucher posted for a zero-movement year', emptyVoucherRows.length === 0);
+
     await closeDb();
     console.log('\nDatabase closed.');
 
