@@ -44,4 +44,9 @@ router.get('/export-excel', authenticateJWT, (req, res) => reportsController.exp
 // ==========================================
 router.get('/trial-balance', authenticateJWT, (req, res) => reportsController.getTrialBalance(req, res));
 
+// ==========================================
+// 7. Automatic Year-End Close
+// ==========================================
+router.post('/close-financial-year', authenticateJWT, (req, res) => reportsController.closeFinancialYear(req, res));
+
 export default router;

@@ -114,6 +114,20 @@ export class ReportsController {
     }
   }
 
+  async closeFinancialYear(req: AuthenticatedRequest, res: Response) {
+    const companyId = req.user?.company_id;
+    if (!companyId || !req.user) return res.status(400).json({ error: 'Company scope required.' });
+
+    const { financialYear } = req.body;
+
+    try {
+      const result = await reportsService.closeFinancialYear(companyId, { id: req.user.id, username: req.user.username }, financialYear);
+      return res.json(result);
+    } catch (error: any) {
+      return res.status(400).json({ error: error.message });
+    }
+  }
+
   async getTrialBalance(req: AuthenticatedRequest, res: Response) {
     const companyId = req.user?.company_id;
     if (!companyId) return res.status(400).json({ error: 'Company scope required.' });

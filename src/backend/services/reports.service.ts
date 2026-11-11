@@ -1,6 +1,8 @@
-import { getDb } from '../db/index';
+import { getDb, withTransaction } from '../db/index';
 import { reportsRepository } from '../repositories/reports.repository';
 import { companyRepository, accountRepository } from '../repositories/masters.repository';
+import { accVoucherService } from './accvoucher.service';
+import { accVoucherRepository } from '../repositories/accvoucher.repository';
 import { generateInvoicePdf, generateChallanPdf } from './pdf.service';
 import { generateExcelBuffer } from './excel.service';
 
@@ -8,6 +10,15 @@ import { generateExcelBuffer } from './excel.service';
 // The last six come from AC_PLUS imports (scripts/acplus).
 const CREDIT_NATURE_GROUPS = ['Sundry Creditors', 'Capital Account', 'Direct Income', 'Indirect Income', 'Duties & Taxes',
   'Sales', 'Secured Loans', 'Unsecured Loans', 'Bank OverDraft', 'Current Liabilities', 'Other Liabilities'];
+
+/** Primary groups closed to zero (reversed to the company's P&L closing account) at year-end. Not a full P&L/BS classification — see R21. */
+const PNL_GROUPS = ['Direct Income', 'Indirect Income', 'Direct Expenses', 'Indirect Expenses', 'Sales', 'Purchase'];
+
+/** "2026-27" -> the FY's first and last calendar day. */
+function parseFinancialYear(financialYear: string): { start: string; end: string } {
+  const year = Number(financialYear.slice(0, 4));
+  return { start: `${year}-04-01`, end: `${year + 1}-03-31` };
+}
 
 export class ReportsService {
   async getDashboardSummary(companyId: string | null, isSuperAdmin: boolean) {
@@ -518,6 +529,59 @@ export class ReportsService {
     }).filter(acc => acc.debit > 0 || acc.credit > 0); // Only return non-zero balances
 
     return results;
+  }
+
+  /**
+   * Zeroes out P&L-group accounts' FY movement and transfers the net profit/loss to the
+   * company's configured closing (Capital) account, as one journal voucher. Re-runnable:
+   * calling this again for the same financialYear replaces the prior closing voucher.
+   */
+  async closeFinancialYear(companyId: string, user: { id: string; username: string }, financialYear: string) {
+    const company = await companyRepository.findById(companyId);
+    if (!company?.pnl_closing_account_id) {
+      throw new Error('Set a P&L closing account in Company Settings before closing a financial year.');
+    }
+
+    const { start, end } = parseFinancialYear(financialYear);
+    const movements = await this.getTrialBalance(companyId, start, end, 'without_opening');
+    const pnlRows = movements.filter(r => PNL_GROUPS.includes(r.primaryGroupName));
+    const realRows = pnlRows.filter(r => !r.id.startsWith('VIRTUAL_'));
+    const virtualRows = pnlRows.filter(r => r.id.startsWith('VIRTUAL_'));
+
+    const lines = realRows
+      .filter(r => r.debit !== r.credit)
+      .map(r => ({
+        accountId: r.id,
+        debitAmount: r.credit,
+        creditAmount: r.debit,
+        particulars: `Year-end close FY ${financialYear}`
+      }));
+
+    const netProfitLoss = realRows.reduce((sum, r) => sum + (r.credit - r.debit), 0);
+    if (Math.abs(netProfitLoss) > 0.005) {
+      lines.push({
+        accountId: company.pnl_closing_account_id,
+        debitAmount: netProfitLoss < 0 ? -netProfitLoss : 0,
+        creditAmount: netProfitLoss > 0 ? netProfitLoss : 0,
+        particulars: `Year-end close FY ${financialYear}: net ${netProfitLoss >= 0 ? 'profit' : 'loss'}`
+      });
+    }
+
+    const voucherNo = `CLOSE-${financialYear}`;
+    if (lines.length > 0) {
+      await accVoucherService.saveVoucher(companyId, user, {
+        type: 'journal', voucherDate: end, voucherNo, voucherType: 'Books Closing', isNew: false, lines
+      });
+    } else {
+      await withTransaction(db => accVoucherRepository.deleteJournalVouchersByNo(db, companyId, voucherNo));
+    }
+
+    return {
+      voucherNo,
+      netProfitLoss,
+      closedAccounts: realRows.map(r => ({ name: r.name, amount: r.credit - r.debit })),
+      skippedAccounts: [] as { name: string; amount: number }[]
+    };
   }
 }
 export const reportsService = new ReportsService();

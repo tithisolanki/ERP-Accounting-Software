@@ -222,6 +222,67 @@ async function runTests() {
     const capitalAccounts = await reportsService.getAccountsByPrimaryGroup(company.id, 'Sundry Debtors');
     check('Accounts-by-group returns the seeded debtor', capitalAccounts.some((a: any) => a.id === customer.id));
 
+    console.log('\nTest 13: Automatic year-end close, happy path...');
+    const now13 = new Date().toISOString();
+    const incomeGroupId = crypto.randomUUID();
+    const expenseGroupId = crypto.randomUUID();
+    const capitalGroupId = crypto.randomUUID();
+    const directIncomePG = await db.get('SELECT id FROM primary_groups WHERE name = "Direct Income"');
+    const directExpensesPG = await db.get('SELECT id FROM primary_groups WHERE name = "Direct Expenses"');
+    const capitalPG = await db.get('SELECT id FROM primary_groups WHERE name = "Capital Account"');
+    await db.run(`INSERT INTO groups (id, company_id, name, primary_group_id, is_dirty, updated_at) VALUES (?, ?, 'Direct Income', ?, 0, ?)`, [incomeGroupId, company.id, directIncomePG.id, now13]);
+    await db.run(`INSERT INTO groups (id, company_id, name, primary_group_id, is_dirty, updated_at) VALUES (?, ?, 'Direct Expenses', ?, 0, ?)`, [expenseGroupId, company.id, directExpensesPG.id, now13]);
+    await db.run(`INSERT INTO groups (id, company_id, name, primary_group_id, is_dirty, updated_at) VALUES (?, ?, 'Capital Account', ?, 0, ?)`, [capitalGroupId, company.id, capitalPG.id, now13]);
+
+    const salesAccountId = crypto.randomUUID();
+    const purchaseAccountId = crypto.randomUUID();
+    const capitalAccountId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Sales Account', 0, 'Direct Income', 0, ?)`, [salesAccountId, company.id, now13]);
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Purchase Account', 0, 'Direct Expenses', 0, ?)`, [purchaseAccountId, company.id, now13]);
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Owner Capital', 0, 'Capital Account', 0, ?)`, [capitalAccountId, company.id, now13]);
+
+    // Test 12 already set pnl_closing_account_id on this company — clear it for this check.
+    await companyService.updateCompany(company.id, { ...actor, company_id: company.id }, { pnl_closing_account_id: null });
+    check('Close rejected with no pnl_closing_account_id set',
+      await rejects(() => reportsService.closeFinancialYear(company.id, actor, '2026-27'), 'closing account'));
+
+    await companyService.updateCompany(company.id, { ...actor, company_id: company.id }, { pnl_closing_account_id: capitalAccountId });
+
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'journal', voucherDate: '2026-06-01', voucherNo: 'JV-INC1', voucherType: 'Journal', isNew: true,
+      lines: [{ accountId: customer.id, debitAmount: 1000 }, { accountId: salesAccountId, creditAmount: 1000 }]
+    });
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'journal', voucherDate: '2026-06-02', voucherNo: 'JV-EXP1', voucherType: 'Journal', isNew: true,
+      lines: [{ accountId: purchaseAccountId, debitAmount: 400 }, { accountId: customer.id, creditAmount: 400 }]
+    });
+
+    const closeResult = await reportsService.closeFinancialYear(company.id, actor, '2026-27');
+    check('Net profit computed as 1000 - 400', closeResult.netProfitLoss === 600, String(closeResult.netProfitLoss));
+    check('Closing voucher number follows the pattern', closeResult.voucherNo === 'CLOSE-2026-27');
+
+    const closingVoucherRows = await db.all('SELECT * FROM journal_vouchers WHERE company_id = ? AND voucher_no = ?', [company.id, 'CLOSE-2026-27']);
+    const closingTotalDr = closingVoucherRows.reduce((s, r) => s + r.debit_amount, 0);
+    const closingTotalCr = closingVoucherRows.reduce((s, r) => s + r.credit_amount, 0);
+    check('Closing voucher balances', Math.abs(closingTotalDr - closingTotalCr) < 0.01, JSON.stringify({ closingTotalDr, closingTotalCr }));
+
+    const fyMovementAfterClose = await reportsService.getTrialBalance(company.id, '2026-04-01', '2027-03-31', 'without_opening');
+    const salesRowAfter = fyMovementAfterClose.find(r => r.id === salesAccountId);
+    const purchaseRowAfter = fyMovementAfterClose.find(r => r.id === purchaseAccountId);
+    check('Sales Account FY movement zeroed by the close', !salesRowAfter || (salesRowAfter.debit === salesRowAfter.credit));
+    check('Purchase Account FY movement zeroed by the close', !purchaseRowAfter || (purchaseRowAfter.debit === purchaseRowAfter.credit));
+    const capitalRowAfter = fyMovementAfterClose.find(r => r.id === capitalAccountId)!;
+    check('Owner Capital credited by the net profit', capitalRowAfter.credit - capitalRowAfter.debit === 600);
+
+    // A posting in the NEXT financial year must survive this year's close untouched.
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'journal', voucherDate: '2027-06-01', voucherNo: 'JV-INC2', voucherType: 'Journal', isNew: true,
+      lines: [{ accountId: customer.id, debitAmount: 500 }, { accountId: salesAccountId, creditAmount: 500 }]
+    });
+    const nextFyMovement = await reportsService.getTrialBalance(company.id, '2027-04-01', '2028-03-31', 'without_opening');
+    const salesRowNextFy = nextFyMovement.find(r => r.id === salesAccountId)!;
+    check("Next FY's Sales Account posting is untouched by this year's close", salesRowNextFy.credit === 500 && salesRowNextFy.debit === 0);
+
     await closeDb();
     console.log('\nDatabase closed.');
 
