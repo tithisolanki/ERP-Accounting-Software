@@ -28,6 +28,7 @@ import {
 import { AccountOpeningBalancePage } from '../modules/opening/AccountOpeningBalancePage';
 import { StockOpeningBalancePage } from '../modules/opening/StockOpeningBalancePage';
 import { TrialBalancePage } from '../modules/reports/trial-balance';
+import { CloseFinancialYearPage } from '../modules/reports/close-financial-year';
 import { 
   FolderClosed, 
   FileText, 
@@ -217,6 +218,9 @@ export const App: React.FC = () => {
       case 'reports':
         if (reportType === 'trial_balance') {
           return <TrialBalancePage />;
+        }
+        if (reportType === 'close_financial_year') {
+          return <CloseFinancialYearPage />;
         }
         return null;
       case 'account_opening':

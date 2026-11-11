@@ -84,7 +84,8 @@ export const registerSidebarItems = [
 ];
 
 export const reportsSidebarItems = [
-  { id: 'trial_balance', name: 'Trial Balance' }
+  { id: 'trial_balance', name: 'Trial Balance' },
+  { id: 'close_financial_year', name: 'Close Financial Year' }
 ];
 
 export const quickAccessItems = [

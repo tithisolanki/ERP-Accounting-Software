@@ -30,5 +30,16 @@ export const ReportsService = {
 
   async getAccountsByGroup(token: string, name: string): Promise<{ id: string; name: string }[]> {
     return apiFetch(`/api/reports/accounts-by-group?name=${encodeURIComponent(name)}`, token);
+  },
+
+  async closeFinancialYear(token: string, financialYear: string): Promise<{
+    voucherNo: string; netProfitLoss: number;
+    closedAccounts: { name: string; amount: number }[]; skippedAccounts: { name: string; amount: number }[];
+  }> {
+    return apiFetch('/api/reports/close-financial-year', token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ financialYear })
+    });
   }
 };
