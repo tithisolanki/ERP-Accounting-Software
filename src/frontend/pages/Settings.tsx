@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { CompanyService, AuthService } from '../services/api';
+import { CompanyService, AuthService, ReportsService } from '../services/api';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -27,6 +27,8 @@ export const Settings: React.FC = () => {
   const [bank2AccountNo, setBank2AccountNo] = useState('');
   const [bank2Ifsc, setBank2Ifsc] = useState('');
   const [creditInterestRate, setCreditInterestRate] = useState('');
+  const [pnlClosingAccountId, setPnlClosingAccountId] = useState('');
+  const [capitalAccounts, setCapitalAccounts] = useState<{ id: string; name: string }[]>([]);
 
   // Password state
   const [currentPass, setCurrentPass] = useState('');
@@ -72,9 +74,16 @@ export const Settings: React.FC = () => {
         setBank2AccountNo(activeCompany.bank2_account_no || '');
         setBank2Ifsc(activeCompany.bank2_ifsc || '');
         setCreditInterestRate(activeCompany.credit_interest_rate != null ? String(activeCompany.credit_interest_rate) : '');
+        setPnlClosingAccountId(activeCompany.pnl_closing_account_id || '');
       }
     } catch {
       addNotification('error', 'Failed to load company details.');
+    }
+
+    try {
+      setCapitalAccounts(await ReportsService.getAccountsByGroup(token, 'Capital Account'));
+    } catch {
+      addNotification('error', 'Failed to load capital accounts.');
     }
   };
 
@@ -110,7 +119,8 @@ export const Settings: React.FC = () => {
         bank2_name: bank2Name,
         bank2_account_no: bank2AccountNo,
         bank2_ifsc: bank2Ifsc,
-        credit_interest_rate: creditInterestRate ? Number(creditInterestRate) : undefined
+        credit_interest_rate: creditInterestRate ? Number(creditInterestRate) : undefined,
+        pnl_closing_account_id: pnlClosingAccountId || undefined
       }, token!);
 
       addNotification('success', 'Company details updated successfully.');
@@ -336,6 +346,17 @@ export const Settings: React.FC = () => {
                 onChange={(e) => setCreditInterestRate(e.target.value)}
                 placeholder="24"
                 type="number"
+                disabled={!isAdmin}
+                className={!isAdmin ? 'bg-slate-100/60' : ''}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Select
+                label="P&L Closing Account (Capital)"
+                value={pnlClosingAccountId}
+                onChange={(e) => setPnlClosingAccountId(e.target.value)}
+                options={[{ value: '', label: 'Not set' }, ...capitalAccounts.map(a => ({ value: a.id, label: a.name }))]}
                 disabled={!isAdmin}
                 className={!isAdmin ? 'bg-slate-100/60' : ''}
               />
