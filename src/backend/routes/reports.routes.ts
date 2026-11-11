@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { reportsController } from '../controllers/reports.controller';
-import { authenticateJWT } from '../middleware/auth';
+import { authenticateJWT, requireRole } from '../middleware/auth';
 
 const router = Router();
 
@@ -47,6 +47,6 @@ router.get('/trial-balance', authenticateJWT, (req, res) => reportsController.ge
 // ==========================================
 // 7. Automatic Year-End Close
 // ==========================================
-router.post('/close-financial-year', authenticateJWT, (req, res) => reportsController.closeFinancialYear(req, res));
+router.post('/close-financial-year', authenticateJWT, requireRole(['ADMIN']), (req, res) => reportsController.closeFinancialYear(req, res));
 
 export default router;

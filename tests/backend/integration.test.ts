@@ -296,18 +296,41 @@ async function runTests() {
       JSON.stringify(closeResult2.skippedAccounts));
 
     const closingVoucherRows2 = await db.all('SELECT * FROM journal_vouchers WHERE company_id = ? AND voucher_no = ?', [company.id, 'CLOSE-2026-27']);
-    check('Still exactly one closing voucher after re-close', new Set(closingVoucherRows2.map((r: any) => r.voucher_no)).size === 1);
+    const distinctClosingVoucherNos = await db.all("SELECT DISTINCT voucher_no FROM journal_vouchers WHERE company_id = ? AND voucher_type = 'Books Closing'", [company.id]);
+    check('Still exactly one closing voucher after re-close', distinctClosingVoucherNos.length === 1, JSON.stringify(distinctClosingVoucherNos));
     const closingTotalDr2 = closingVoucherRows2.reduce((s: number, r: any) => s + r.debit_amount, 0);
     const closingTotalCr2 = closingVoucherRows2.reduce((s: number, r: any) => s + r.credit_amount, 0);
     check('Re-closed voucher still balances (skipped amount excluded)', Math.abs(closingTotalDr2 - closingTotalCr2) < 0.01);
     check('Re-close recomputed the same net profit (unmatched account excluded from the total)',
       closeResult2.netProfitLoss === closeResult.netProfitLoss, String(closeResult2.netProfitLoss));
 
+    // Re-close after a REAL new posting must recompute a genuinely different net profit.
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'journal', voucherDate: '2026-06-10', voucherNo: 'JV-INC3', voucherType: 'Journal', isNew: true,
+      lines: [{ accountId: customer.id, debitAmount: 200 }, { accountId: salesAccountId, creditAmount: 200 }]
+    });
+    const closeResult3 = await reportsService.closeFinancialYear(company.id, actor, '2026-27');
+    check('Re-close after a real posting recomputes a genuinely different net profit', closeResult3.netProfitLoss === 800, String(closeResult3.netProfitLoss));
+
     // A year with no P&L postings at all must close cleanly with no stale voucher left behind.
     const emptyCloseResult = await reportsService.closeFinancialYear(company.id, actor, '2030-31');
     check('Zero-movement year reports zero net profit/loss', emptyCloseResult.netProfitLoss === 0);
     const emptyVoucherRows = await db.all('SELECT * FROM journal_vouchers WHERE company_id = ? AND voucher_no = ?', [company.id, 'CLOSE-2030-31']);
     check('No voucher posted for a zero-movement year', emptyVoucherRows.length === 0);
+
+    console.log('\nTest 15: Close validates its inputs instead of crashing or silently corrupting the books...');
+    check('Malformed financial year rejected', await rejects(() => reportsService.closeFinancialYear(company.id, actor, 'not-a-year'), 'financial year'));
+    check('Non-sequential financial year rejected', await rejects(() => reportsService.closeFinancialYear(company.id, actor, '2026-29'), 'financial year'));
+
+    await companyService.updateCompany(company.id, { ...actor, company_id: company.id }, { pnl_closing_account_id: customer.id });
+    check('Closing account must be under Capital Account, not just any account',
+      await rejects(() => reportsService.closeFinancialYear(company.id, actor, '2026-27'), 'closing account'));
+
+    await companyService.updateCompany(company.id, { ...actor, company_id: company.id }, { pnl_closing_account_id: crypto.randomUUID() });
+    check('Nonexistent closing account rejected',
+      await rejects(() => reportsService.closeFinancialYear(company.id, actor, '2026-27'), 'closing account'));
+
+    await companyService.updateCompany(company.id, { ...actor, company_id: company.id }, { pnl_closing_account_id: capitalAccountId });
 
     await closeDb();
     console.log('\nDatabase closed.');

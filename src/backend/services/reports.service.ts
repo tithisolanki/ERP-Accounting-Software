@@ -14,9 +14,13 @@ const CREDIT_NATURE_GROUPS = ['Sundry Creditors', 'Capital Account', 'Direct Inc
 /** Primary groups closed to zero (reversed to the company's P&L closing account) at year-end. Not a full P&L/BS classification — see R21. */
 const PNL_GROUPS = ['Direct Income', 'Indirect Income', 'Direct Expenses', 'Indirect Expenses', 'Sales', 'Purchase'];
 
-/** "2026-27" -> the FY's first and last calendar day. */
+/** "2026-27" -> the FY's first and last calendar day. Throws if the string isn't that exact shape. */
 function parseFinancialYear(financialYear: string): { start: string; end: string } {
-  const year = Number(financialYear.slice(0, 4));
+  const match = /^(\d{4})-(\d{2})$/.exec(financialYear || '');
+  if (!match || Number(match[2]) !== (Number(match[1]) + 1) % 100) {
+    throw new Error(`Invalid financial year "${financialYear}". Expected the form "2026-27".`);
+  }
+  const year = Number(match[1]);
   return { start: `${year}-04-01`, end: `${year + 1}-03-31` };
 }
 
@@ -537,12 +541,17 @@ export class ReportsService {
    * calling this again for the same financialYear replaces the prior closing voucher.
    */
   async closeFinancialYear(companyId: string, user: { id: string; username: string }, financialYear: string) {
+    const { start, end } = parseFinancialYear(financialYear);
+
     const company = await companyRepository.findById(companyId);
     if (!company?.pnl_closing_account_id) {
       throw new Error('Set a P&L closing account in Company Settings before closing a financial year.');
     }
+    const closingAccount = await reportsRepository.getAccountWithPrimaryGroup(companyId, company.pnl_closing_account_id);
+    if (!closingAccount || closingAccount.primary_group_name !== 'Capital Account') {
+      throw new Error('The configured P&L closing account no longer exists or is not a Capital Account. Fix it in Company Settings before closing a financial year.');
+    }
 
-    const { start, end } = parseFinancialYear(financialYear);
     const voucherNo = `CLOSE-${financialYear}`;
     // Delete any prior closing voucher BEFORE measuring this FY's movement: its reversal lines
     // are dated inside this same FY range, so leaving them in place would make a re-close see
