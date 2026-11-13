@@ -799,6 +799,15 @@ const LEDGER_ROWS_PER_PAGE = 40;
 const LEDGER_ROW_HEIGHT = 14;
 const LEDGER_BOTTOM_MARGIN = 60;
 
+/** Strips newlines and replaces characters the WinAnsi/Helvetica encoding can't represent
+ * (e.g. ₹, Gujarati script) so a free-text narration never crashes PDF generation. */
+function sanitizeForPdf(text: string): string {
+  return (text || '')
+    .replace(/\r?\n/g, ' ')
+    .replace(/₹/g, 'Rs.')
+    .replace(/[^\x00-\xFF]/g, '?');
+}
+
 /** Draws the header block (company/account/date-range/column headers), plus the
  * opening-balance row on the account's first page only. Returns the y to start rows at. */
 function drawLedgerHeader(
@@ -806,9 +815,9 @@ function drawLedgerHeader(
   company: { name: string }, accountData: AccountLedgerPdfData,
   startDate: string, endDate: string, isFirstPage: boolean
 ): number {
-  page.drawText(company.name, { x: 25, y: 810, size: 12, font: boldFont });
+  page.drawText(sanitizeForPdf(company.name), { x: 25, y: 810, size: 12, font: boldFont });
   page.drawText('Account Ledger', { x: 25, y: 795, size: 10, font: boldFont });
-  page.drawText(accountData.account.name + (isFirstPage ? '' : ' (continued)'), { x: 25, y: 780, size: 10, font: boldFont });
+  page.drawText(sanitizeForPdf(accountData.account.name) + (isFirstPage ? '' : ' (continued)'), { x: 25, y: 780, size: 10, font: boldFont });
   page.drawText(`${formatDate(startDate)} to ${formatDate(endDate)}`, { x: 25, y: 765, size: 8, font: font });
 
   let y = 745;
@@ -853,8 +862,12 @@ export async function generateLedgerPdf(data: LedgerPdfData): Promise<Uint8Array
         rowsOnPage = 0;
       }
 
+      // Particulars column runs x=100 to the Debit column at x=350: truncate to fit (reusing
+      // the invoice PDF's own wrapText helper) and sanitize so a narration can never crash or
+      // overlap the amount columns.
+      const particulars = wrapText(sanitizeForPdf(row.particulars), 240, 8, font)[0] || '';
       page.drawText(formatDate(row.date), { x: 25, y, size: 8, font: font });
-      page.drawText(row.particulars, { x: 100, y, size: 8, font: font });
+      page.drawText(particulars, { x: 100, y, size: 8, font: font });
       page.drawText(row.debit ? row.debit.toFixed(2) : '-', { x: 350, y, size: 8, font: font });
       page.drawText(row.credit ? row.credit.toFixed(2) : '-', { x: 430, y, size: 8, font: font });
       page.drawText(row.balance.toFixed(2), { x: 510, y, size: 8, font: boldFont });

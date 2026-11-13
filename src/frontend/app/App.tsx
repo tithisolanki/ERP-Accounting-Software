@@ -55,7 +55,8 @@ export const App: React.FC = () => {
   const [mastersSubTab, setMastersSubTab] = useState<string>('accounts');
   const [voucherType, setVoucherType] = useState<'purchase' | 'sale' | 'challan'>('sale');
   const [registerType, setRegisterType] = useState<'sales' | 'purchases' | 'journal'>('sales');
-  const [reportType, setReportType] = useState<'trial_balance' | 'party_ledger'>('trial_balance');
+  const [reportType, setReportType] = useState<'party_ledger'>('party_ledger');
+  const [misReportType, setMisReportType] = useState<'trial_balance'>('trial_balance');
 
   const handleTabSwitch = (targetTab: string | null, targetSubTab?: string | null) => {
     if ((window as any).isMastersDirty) {
@@ -74,8 +75,11 @@ export const App: React.FC = () => {
     if (targetTab === 'registers' && targetSubTab) {
       setRegisterType(targetSubTab as any);
     }
-    if ((targetTab === 'reports' || targetTab === 'misreports') && targetSubTab) {
+    if (targetTab === 'reports' && targetSubTab) {
       setReportType(targetSubTab as any);
+    }
+    if (targetTab === 'misreports' && targetSubTab) {
+      setMisReportType(targetSubTab as any);
     }
   };
 
@@ -225,7 +229,7 @@ export const App: React.FC = () => {
         }
         return null;
       case 'misreports':
-        if (reportType === 'trial_balance') {
+        if (misReportType === 'trial_balance') {
           return <TrialBalancePage />;
         }
         return null;
@@ -627,9 +631,9 @@ export const App: React.FC = () => {
                       key={item.id}
                       type="button"
                       onClick={() => handleTabSwitch('misreports', item.id)}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-lg text-xs font-semibold transition-all text-left cursor-pointer ${reportType === item.id ? 'bg-indigo-50/50 text-indigo-650 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-lg text-xs font-semibold transition-all text-left cursor-pointer ${misReportType === item.id ? 'bg-indigo-50/50 text-indigo-650 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
                     >
-                      <div className={`w-1.5 h-1.5 rounded-full ${reportType === item.id ? 'bg-indigo-600' : 'bg-slate-300'}`} />
+                      <div className={`w-1.5 h-1.5 rounded-full ${misReportType === item.id ? 'bg-indigo-600' : 'bg-slate-300'}`} />
                       <span>{item.name}</span>
                     </button>
                   ))}

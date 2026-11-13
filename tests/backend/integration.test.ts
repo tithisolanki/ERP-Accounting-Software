@@ -366,10 +366,11 @@ async function runTests() {
     const excelExport = await reportsService.exportExcel(company.id, 'ledger', ledgerTestAccountId);
     check('exportExcel\'s existing 2-arg caller still works unchanged', excelExport.buffer.length > 0);
 
-    console.log('\nTest 17: generateLedgerPdf paginates correctly, including per-account page resets...');
-    const manyRows = Array.from({ length: 45 }, (_, i) => ({
+    console.log('\nTest 17: generateLedgerPdf paginates to the exact row-count boundary (page NUMBER of pages, not the drawn "Page N" labels — those can\'t be read back without a text-extraction library)...');
+    const makeRows = (n: number) => Array.from({ length: n }, (_, i) => ({
       date: `2026-04-${String((i % 28) + 1).padStart(2, '0')}`, particulars: `Row ${i}`, debit: 10, credit: 0, balance: 10 * (i + 1)
     }));
+    const manyRows = makeRows(45);
     const pdfBytes = await generateLedgerPdf({
       company: { name: 'Test Co' },
       accounts: [
@@ -382,6 +383,22 @@ async function runTests() {
     check('Returns a non-empty buffer', pdfBytes.length > 0);
     const loadedDoc = await PDFDocument.load(pdfBytes);
     check('45-row account spans 2 pages, +1 for the short account, +1 for the zero-row account (4 total)', loadedDoc.getPageCount() === 4, String(loadedDoc.getPageCount()));
+
+    const exactly40 = await generateLedgerPdf({ company: { name: 'Test Co' }, accounts: [{ account: { name: 'Exactly 40' }, openingBalance: 0, closingBalance: 400, ledger: makeRows(40) }], startDate: '2026-04-01', endDate: '2027-03-31' });
+    check('Exactly 40 rows is 1 page (no row dropped or duplicated at the boundary)', (await PDFDocument.load(exactly40)).getPageCount() === 1);
+    const exactly41 = await generateLedgerPdf({ company: { name: 'Test Co' }, accounts: [{ account: { name: 'Exactly 41' }, openingBalance: 0, closingBalance: 410, ledger: makeRows(41) }], startDate: '2026-04-01', endDate: '2027-03-31' });
+    check('Exactly 41 rows is 2 pages', (await PDFDocument.load(exactly41)).getPageCount() === 2);
+
+    const unicodePdf = await generateLedgerPdf({
+      company: { name: 'Test Co' },
+      accounts: [{
+        account: { name: 'Account ₹' },
+        openingBalance: 0, closingBalance: 100,
+        ledger: [{ date: '2026-04-01', particulars: 'Payment ₹100 received from a customer with a very long narration that would otherwise overlap the Debit column', debit: 100, credit: 0, balance: 100 }]
+      }],
+      startDate: '2026-04-01', endDate: '2027-03-31'
+    });
+    check('Unencodable characters (₹, non-Latin1) do not crash PDF generation', unicodePdf.length > 0);
 
     console.log('\nTest 18: getPartyLedgerPdf assembles multiple accounts and rejects an unknown one...');
     const multiAccountPdf = await reportsService.getPartyLedgerPdf(company.id, [ledgerTestAccountId, customer.id], '2026-01-01', '2026-12-31');
