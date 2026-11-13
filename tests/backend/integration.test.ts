@@ -383,6 +383,12 @@ async function runTests() {
     const loadedDoc = await PDFDocument.load(pdfBytes);
     check('45-row account spans 2 pages, +1 for the short account, +1 for the zero-row account (4 total)', loadedDoc.getPageCount() === 4, String(loadedDoc.getPageCount()));
 
+    console.log('\nTest 18: getPartyLedgerPdf assembles multiple accounts and rejects an unknown one...');
+    const multiAccountPdf = await reportsService.getPartyLedgerPdf(company.id, [ledgerTestAccountId, customer.id], '2026-01-01', '2026-12-31');
+    check('Multi-account PDF is non-empty', multiAccountPdf.length > 0);
+    check('Unknown account id is rejected, not silently skipped',
+      await rejects(() => reportsService.getPartyLedgerPdf(company.id, [ledgerTestAccountId, crypto.randomUUID()], '2026-01-01', '2026-12-31'), 'not found'));
+
     await closeDb();
     console.log('\nDatabase closed.');
 

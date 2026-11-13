@@ -32,6 +32,26 @@ export class ReportsController {
     }
   }
 
+  async getPartyLedgerPdf(req: AuthenticatedRequest, res: Response) {
+    const companyId = req.user?.company_id;
+    if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
+
+    const accountIds = ((req.query.accountIds as string) || '').split(',').filter(Boolean);
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
+
+    try {
+      const pdfBuffer = await reportsService.getPartyLedgerPdf(companyId, accountIds, startDate, endDate);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename="party-ledger.pdf"');
+      return res.end(Buffer.from(pdfBuffer));
+    } catch (error: any) {
+      console.error('Party Ledger PDF Generation Error:', error);
+      const status = error.message.includes('not found') ? 404 : 500;
+      return res.status(status).json({ error: error.message });
+    }
+  }
+
   async getAccountsByGroup(req: AuthenticatedRequest, res: Response) {
     const companyId = req.user?.company_id;
     const name = req.query.name as string;

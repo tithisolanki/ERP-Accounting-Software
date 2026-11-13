@@ -3,7 +3,7 @@ import { reportsRepository } from '../repositories/reports.repository';
 import { companyRepository, accountRepository } from '../repositories/masters.repository';
 import { accVoucherService } from './accvoucher.service';
 import { accVoucherRepository } from '../repositories/accvoucher.repository';
-import { generateInvoicePdf, generateChallanPdf } from './pdf.service';
+import { generateInvoicePdf, generateChallanPdf, generateLedgerPdf } from './pdf.service';
 import { generateExcelBuffer } from './excel.service';
 
 /** Primary groups whose balance is normally on the credit side. */
@@ -97,6 +97,22 @@ export class ReportsService {
       closingBalance: sign * runningNetDr,
       ledger: ledgerRows
     };
+  }
+
+  /** One PDF covering several accounts' ledgers, each on its own page(s) — see generateLedgerPdf. */
+  async getPartyLedgerPdf(companyId: string, accountIds: string[], startDate?: string, endDate?: string): Promise<Uint8Array> {
+    const company = await companyRepository.findById(companyId);
+    const accounts = [];
+    for (const accountId of accountIds) {
+      const { account, openingBalance, closingBalance, ledger } = await this.getAccountLedger(companyId, accountId, startDate, endDate);
+      accounts.push({ account, openingBalance, closingBalance, ledger });
+    }
+    return generateLedgerPdf({
+      company: { name: company?.name || 'TexFin Vendor' },
+      accounts,
+      startDate: startDate || '',
+      endDate: endDate || ''
+    });
   }
 
   async getGstReport(companyId: string) {

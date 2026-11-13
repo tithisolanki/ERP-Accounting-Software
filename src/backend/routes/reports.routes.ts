@@ -20,6 +20,11 @@ router.get('/ledger/:accountId', authenticateJWT, (req, res) => reportsControlle
 router.get('/accounts-by-group', authenticateJWT, (req, res) => reportsController.getAccountsByGroup(req, res));
 
 // ==========================================
+// 2c. Party Ledger PDF (multi-account, per-account page reset)
+// ==========================================
+router.get('/party-ledger-pdf', authenticateJWT, (req, res) => reportsController.getPartyLedgerPdf(req, res));
+
+// ==========================================
 // 3. GST Summary Report
 // ==========================================
 router.get('/gst', authenticateJWT, (req, res) => reportsController.getGstReport(req, res));
