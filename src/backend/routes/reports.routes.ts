@@ -25,6 +25,11 @@ router.get('/accounts-by-group', authenticateJWT, (req, res) => reportsControlle
 router.get('/party-ledger-pdf', authenticateJWT, (req, res) => reportsController.getPartyLedgerPdf(req, res));
 
 // ==========================================
+// 2d. Outstanding & Ageing (by account or broker)
+// ==========================================
+router.get('/outstanding-ledger', authenticateJWT, (req, res) => reportsController.getOutstandingLedger(req, res));
+
+// ==========================================
 // 3. GST Summary Report
 // ==========================================
 router.get('/gst', authenticateJWT, (req, res) => reportsController.getGstReport(req, res));

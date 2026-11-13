@@ -52,6 +52,29 @@ export class ReportsController {
     }
   }
 
+  async getOutstandingLedger(req: AuthenticatedRequest, res: Response) {
+    const companyId = req.user?.company_id;
+    if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
+
+    const accountIds = ((req.query.accountIds as string) || '').split(',').filter(Boolean);
+    const asOfDate = req.query.asOfDate as string;
+    const paymentUpto = req.query.paymentUpto as string;
+    const groupBy = (req.query.groupBy as string) === 'broker' ? 'broker' : 'account';
+    const dueOnly = req.query.dueOnly === 'true';
+    const overdueDaysThreshold = req.query.overdueDays ? Number(req.query.overdueDays) : undefined;
+
+    if (!accountIds.length || !asOfDate || !paymentUpto) {
+      return res.status(400).json({ error: 'accountIds, asOfDate and paymentUpto are required.' });
+    }
+
+    try {
+      const result = await reportsService.getOutstandingLedger(companyId, accountIds, asOfDate, paymentUpto, groupBy, dueOnly, overdueDaysThreshold);
+      return res.json(result);
+    } catch (error: any) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   async getAccountsByGroup(req: AuthenticatedRequest, res: Response) {
     const companyId = req.user?.company_id;
     const name = req.query.name as string;

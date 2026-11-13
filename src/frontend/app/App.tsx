@@ -30,6 +30,7 @@ import { AccountOpeningBalancePage } from '../modules/opening/AccountOpeningBala
 import { StockOpeningBalancePage } from '../modules/opening/StockOpeningBalancePage';
 import { TrialBalancePage } from '../modules/reports/trial-balance';
 import { PartyLedgerPage } from '../modules/reports/party-ledger';
+import { OutstandingLedgerPage } from '../modules/reports/outstanding-ledger';
 import { CloseFinancialYearPage } from '../modules/reports/close-financial-year';
 import { 
   FolderClosed, 
@@ -55,7 +56,7 @@ export const App: React.FC = () => {
   const [mastersSubTab, setMastersSubTab] = useState<string>('accounts');
   const [voucherType, setVoucherType] = useState<'purchase' | 'sale' | 'challan'>('sale');
   const [registerType, setRegisterType] = useState<'sales' | 'purchases' | 'journal'>('sales');
-  const [reportType, setReportType] = useState<'party_ledger'>('party_ledger');
+  const [reportType, setReportType] = useState<'party_ledger' | 'outstanding_ledger'>('party_ledger');
   const [misReportType, setMisReportType] = useState<'trial_balance'>('trial_balance');
 
   const handleTabSwitch = (targetTab: string | null, targetSubTab?: string | null) => {
@@ -226,6 +227,9 @@ export const App: React.FC = () => {
       case 'reports':
         if (reportType === 'party_ledger') {
           return <PartyLedgerPage />;
+        }
+        if (reportType === 'outstanding_ledger') {
+          return <OutstandingLedgerPage />;
         }
         return null;
       case 'misreports':

@@ -41,5 +41,20 @@ export const ReportsService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ financialYear })
     });
+  },
+
+  async getOutstandingLedger(token: string, filters: {
+    accountIds: string[]; asOfDate: string; paymentUpto: string;
+    groupBy: 'account' | 'broker'; dueOnly: boolean; overdueDays?: number;
+  }): Promise<{ groupName: string; bills: any[]; totalOutstanding: number }[]> {
+    const query = new URLSearchParams({
+      accountIds: filters.accountIds.join(','),
+      asOfDate: filters.asOfDate,
+      paymentUpto: filters.paymentUpto,
+      groupBy: filters.groupBy,
+      dueOnly: String(filters.dueOnly),
+      ...(filters.overdueDays != null ? { overdueDays: String(filters.overdueDays) } : {})
+    }).toString();
+    return apiFetch(`/api/reports/outstanding-ledger?${query}`, token);
   }
 };

@@ -115,6 +115,43 @@ export class ReportsService {
     });
   }
 
+  /**
+   * Outstanding & Ageing (R6 part 2): bills across several accounts, grouped by account or
+   * broker, with each bill's days-overdue (asOfDate - (bill date + the account's credit_days)).
+   * dueOnly keeps only bills past their credit days; overdueDaysThreshold (if given) raises that
+   * bar further, matching AC_PLUS's separate "Due Bills" and "Over Due Days" controls.
+   */
+  async getOutstandingLedger(
+    companyId: string, accountIds: string[], asOfDate: string, paymentUpto: string,
+    groupBy: 'account' | 'broker', dueOnly: boolean, overdueDaysThreshold?: number
+  ) {
+    const bills = await accVoucherRepository.getOutstandingBillsForAccounts(companyId, accountIds, asOfDate, paymentUpto);
+    const asOf = new Date(asOfDate).getTime();
+
+    const aged = bills
+      .map(b => {
+        const dueDate = new Date(b.date);
+        dueDate.setDate(dueDate.getDate() + (b.credit_days || 0));
+        const overdueDays = Math.floor((asOf - dueDate.getTime()) / 86400000);
+        return { ...b, dueDate: dueDate.toISOString().split('T')[0], overdueDays };
+      })
+      .filter(b => !dueOnly || b.overdueDays > 0)
+      .filter(b => overdueDaysThreshold == null || b.overdueDays >= overdueDaysThreshold);
+
+    const groups = new Map<string, any[]>();
+    for (const bill of aged) {
+      const key = groupBy === 'broker' ? (bill.broker || '(No Broker)') : bill.accountName;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(bill);
+    }
+
+    return Array.from(groups.entries()).map(([groupName, groupBills]) => ({
+      groupName,
+      bills: groupBills,
+      totalOutstanding: groupBills.reduce((sum, b) => sum + b.balanceDue, 0)
+    }));
+  }
+
   async getGstReport(companyId: string) {
     const companyState = await reportsRepository.getCompanyState(companyId);
 

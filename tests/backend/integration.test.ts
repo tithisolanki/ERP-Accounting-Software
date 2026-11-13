@@ -406,6 +406,23 @@ async function runTests() {
     check('Unknown account id is rejected, not silently skipped',
       await rejects(() => reportsService.getPartyLedgerPdf(company.id, [ledgerTestAccountId, crypto.randomUUID()], '2026-01-01', '2026-12-31'), 'not found'));
 
+    console.log('\nTest 19: Outstanding & Ageing computes overdue days, groups by broker, and the Due-only filter works...');
+    const now19 = new Date().toISOString();
+    const outstandingCustomerId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, credit_days, broker, is_dirty, updated_at) VALUES (?, ?, 'Overdue Customer', 0, 'Sundry Debtors', 30, 'Ramesh Broker', 0, ?)`, [outstandingCustomerId, company.id, now19]);
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9201, date: '2026-01-01', customerId: outstandingCustomerId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 100, rate: 100, gstPercentage: 5 }]
+    });
+
+    const agedLedger = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-06-01', 'broker', true, 20);
+    check('Overdue bill grouped under its broker', agedLedger.length === 1 && agedLedger[0].groupName === 'Ramesh Broker', JSON.stringify(agedLedger));
+    check('Overdue days computed from bill date + credit_days (Jan 1 + 30d = Jan 31; Jan 31 to Jun 1 = 121 days)',
+      agedLedger[0].bills[0].overdueDays === 121, String(agedLedger[0].bills[0]?.overdueDays));
+
+    const dueOnlyExcluded = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-01-05', '2026-01-05', 'account', true);
+    check('Due-only filter excludes a bill not yet past its credit days', dueOnlyExcluded.length === 0, JSON.stringify(dueOnlyExcluded));
+
     await closeDb();
     console.log('\nDatabase closed.');
 

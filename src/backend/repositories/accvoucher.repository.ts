@@ -138,6 +138,47 @@ export class AccVoucherRepository {
     return [...sales, ...purchases].sort((a, b) => (a.date > b.date ? 1 : -1));
   }
 
+  /**
+   * Outstanding bills across several accounts at once (for the Outstanding & Ageing report),
+   * with each bill's account name/broker/credit_days attached for grouping and ageing.
+   * "asOfDate" limits which bills are considered; "paymentUpto" limits which receipts/payments
+   * count against them — matching AC_PLUS's "Outstanding as on Date" + "Payment Including upto Date".
+   */
+  async getOutstandingBillsForAccounts(companyId: string, accountIds: string[], asOfDate: string, paymentUpto: string): Promise<any[]> {
+    const db = await getDb();
+    const placeholders = accountIds.map(() => '?').join(',');
+
+    const sales = await db.all(
+      `SELECT s.id AS billId, 'sale' AS billType, s.invoice_number AS billNumber, s.date,
+              s.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName, a.broker, a.credit_days,
+              s.total_amount - COALESCE(SUM(CASE WHEN rcpt.date <= ? THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0) AS balanceDue
+       FROM sales s
+       JOIN accounts a ON a.id = s.customer_id
+       LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id
+       LEFT JOIN receipts rcpt ON rcpt.id = ra.receipt_id
+       WHERE s.company_id = ? AND s.customer_id IN (${placeholders}) AND s.date <= ?
+       GROUP BY s.id
+       HAVING balanceDue > 0.005
+       ORDER BY s.date`,
+      [paymentUpto, companyId, ...accountIds, asOfDate]
+    );
+    const purchases = await db.all(
+      `SELECT p.id AS billId, 'purchase' AS billType, p.purchase_number AS billNumber, p.date,
+              p.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName, a.broker, a.credit_days,
+              p.total_amount - COALESCE(SUM(CASE WHEN pmt.date <= ? THEN pa.amount_applied + pa.discount_amount ELSE 0 END), 0) AS balanceDue
+       FROM purchases p
+       JOIN accounts a ON a.id = p.supplier_id
+       LEFT JOIN payment_allocations pa ON pa.purchase_id = p.id
+       LEFT JOIN payments pmt ON pmt.id = pa.payment_id
+       WHERE p.company_id = ? AND p.supplier_id IN (${placeholders}) AND p.date <= ?
+       GROUP BY p.id
+       HAVING balanceDue > 0.005
+       ORDER BY p.date`,
+      [paymentUpto, companyId, ...accountIds, asOfDate]
+    );
+    return [...sales, ...purchases].sort((a, b) => (a.date > b.date ? 1 : -1));
+  }
+
   /** Previously saved bill allocations for a set of receipt/payment row ids, keyed by that row's own id. */
   async getAllocationsForLines(companyId: string, kind: 'receipt' | 'payment', lineIds: string[]): Promise<{ lineId: string; billId: string; amount: number; discount: number }[]> {
     if (lineIds.length === 0) return [];

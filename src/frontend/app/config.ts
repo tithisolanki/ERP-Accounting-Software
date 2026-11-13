@@ -92,10 +92,11 @@ export const misreportsSidebarItems = [
   { id: 'trial_balance', name: 'Trial Balance' }
 ];
 
-// AC_PLUS files General Account Ledger under plain Reports (confirmed via its
-// menu resource strings).
+// AC_PLUS files General Account Ledger and the Debtors/Creditors Outstanding
+// Ledger under plain Reports (confirmed via its menu resource strings).
 export const reportsSidebarItems = [
-  { id: 'party_ledger', name: 'Party Ledger' }
+  { id: 'party_ledger', name: 'Party Ledger' },
+  { id: 'outstanding_ledger', name: 'Outstanding & Ageing' }
 ];
 
 export const quickAccessItems = [
