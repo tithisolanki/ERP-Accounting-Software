@@ -4,6 +4,8 @@ import { salesService } from '../../src/backend/services/sales.service';
 import { accVoucherService } from '../../src/backend/services/accvoucher.service';
 import { receiptService } from '../../src/backend/services/cashflow.service';
 import { companyService } from '../../src/backend/services/masters.service';
+import { generateLedgerPdf } from '../../src/backend/services/pdf.service';
+import { PDFDocument } from 'pdf-lib';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -363,6 +365,23 @@ async function runTests() {
 
     const excelExport = await reportsService.exportExcel(company.id, 'ledger', ledgerTestAccountId);
     check('exportExcel\'s existing 2-arg caller still works unchanged', excelExport.buffer.length > 0);
+
+    console.log('\nTest 17: generateLedgerPdf paginates correctly, including per-account page resets...');
+    const manyRows = Array.from({ length: 45 }, (_, i) => ({
+      date: `2026-04-${String((i % 28) + 1).padStart(2, '0')}`, particulars: `Row ${i}`, debit: 10, credit: 0, balance: 10 * (i + 1)
+    }));
+    const pdfBytes = await generateLedgerPdf({
+      company: { name: 'Test Co' },
+      accounts: [
+        { account: { name: 'Overflow Account' }, openingBalance: 0, closingBalance: 450, ledger: manyRows },
+        { account: { name: 'Short Account' }, openingBalance: 0, closingBalance: 20, ledger: [{ date: '2026-04-01', particulars: 'Row A', debit: 20, credit: 0, balance: 20 }] },
+        { account: { name: 'Dormant Account' }, openingBalance: 0, closingBalance: 0, ledger: [] }
+      ],
+      startDate: '2026-04-01', endDate: '2027-03-31'
+    });
+    check('Returns a non-empty buffer', pdfBytes.length > 0);
+    const loadedDoc = await PDFDocument.load(pdfBytes);
+    check('45-row account spans 2 pages, +1 for the short account, +1 for the zero-row account (4 total)', loadedDoc.getPageCount() === 4, String(loadedDoc.getPageCount()));
 
     await closeDb();
     console.log('\nDatabase closed.');

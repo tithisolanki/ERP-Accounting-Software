@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
 
 interface InvoiceData {
   company: {
@@ -779,4 +779,93 @@ export async function generateChallanPdf(data: ChallanData, copies: string[]): P
 
   const pdfBytes = await pdfDoc.save();
   return pdfBytes;
+}
+
+export interface AccountLedgerPdfData {
+  account: { name: string };
+  openingBalance: number;
+  closingBalance: number;
+  ledger: { date: string; particulars: string; debit: number; credit: number; balance: number }[];
+}
+
+export interface LedgerPdfData {
+  company: { name: string; address?: string };
+  accounts: AccountLedgerPdfData[];
+  startDate: string;
+  endDate: string;
+}
+
+const LEDGER_ROWS_PER_PAGE = 40;
+const LEDGER_ROW_HEIGHT = 14;
+const LEDGER_BOTTOM_MARGIN = 60;
+
+/** Draws the header block (company/account/date-range/column headers), plus the
+ * opening-balance row on the account's first page only. Returns the y to start rows at. */
+function drawLedgerHeader(
+  page: PDFPage, font: PDFFont, boldFont: PDFFont,
+  company: { name: string }, accountData: AccountLedgerPdfData,
+  startDate: string, endDate: string, isFirstPage: boolean
+): number {
+  page.drawText(company.name, { x: 25, y: 810, size: 12, font: boldFont });
+  page.drawText('Account Ledger', { x: 25, y: 795, size: 10, font: boldFont });
+  page.drawText(accountData.account.name + (isFirstPage ? '' : ' (continued)'), { x: 25, y: 780, size: 10, font: boldFont });
+  page.drawText(`${formatDate(startDate)} to ${formatDate(endDate)}`, { x: 25, y: 765, size: 8, font: font });
+
+  let y = 745;
+  page.drawText('Date', { x: 25, y, size: 8, font: boldFont });
+  page.drawText('Particulars', { x: 100, y, size: 8, font: boldFont });
+  page.drawText('Debit', { x: 350, y, size: 8, font: boldFont });
+  page.drawText('Credit', { x: 430, y, size: 8, font: boldFont });
+  page.drawText('Balance', { x: 510, y, size: 8, font: boldFont });
+  y -= LEDGER_ROW_HEIGHT;
+
+  if (isFirstPage) {
+    page.drawText('Opening Balance', { x: 100, y, size: 8, font: font });
+    page.drawText(accountData.openingBalance.toFixed(2), { x: 510, y, size: 8, font: boldFont });
+    y -= LEDGER_ROW_HEIGHT;
+  }
+
+  return y;
+}
+
+/**
+ * TexFin's first multi-page PDF: one or more accounts' ledgers, each starting on its
+ * own page with its own page-number counter (AC_PLUS's "New Page per Account" +
+ * "Reset Page No. per Account") rather than one document-wide page count.
+ */
+export async function generateLedgerPdf(data: LedgerPdfData): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  for (const accountData of data.accounts) {
+    let pageInAccount = 1;
+    let page = pdfDoc.addPage([595, 842]);
+    let y = drawLedgerHeader(page, font, boldFont, data.company, accountData, data.startDate, data.endDate, true);
+    let rowsOnPage = 0;
+
+    for (const row of accountData.ledger) {
+      if (rowsOnPage === LEDGER_ROWS_PER_PAGE) {
+        page.drawText(`Page ${pageInAccount}`, { x: 500, y: LEDGER_BOTTOM_MARGIN - 30, size: 8, font: font });
+        pageInAccount += 1;
+        page = pdfDoc.addPage([595, 842]);
+        y = drawLedgerHeader(page, font, boldFont, data.company, accountData, data.startDate, data.endDate, false);
+        rowsOnPage = 0;
+      }
+
+      page.drawText(formatDate(row.date), { x: 25, y, size: 8, font: font });
+      page.drawText(row.particulars, { x: 100, y, size: 8, font: font });
+      page.drawText(row.debit ? row.debit.toFixed(2) : '-', { x: 350, y, size: 8, font: font });
+      page.drawText(row.credit ? row.credit.toFixed(2) : '-', { x: 430, y, size: 8, font: font });
+      page.drawText(row.balance.toFixed(2), { x: 510, y, size: 8, font: boldFont });
+
+      y -= LEDGER_ROW_HEIGHT;
+      rowsOnPage += 1;
+    }
+
+    page.drawText(`Closing Balance: ${accountData.closingBalance.toFixed(2)}`, { x: 300, y, size: 8, font: boldFont });
+    page.drawText(`Page ${pageInAccount}`, { x: 500, y: LEDGER_BOTTOM_MARGIN - 30, size: 8, font: font });
+  }
+
+  return pdfDoc.save();
 }
