@@ -53,26 +53,38 @@ export class ReportsController {
   }
 
   async getOutstandingLedger(req: AuthenticatedRequest, res: Response) {
-    const companyId = req.user?.company_id;
-    if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
+    // "Include All Companies" is AC_PLUS's own field for a multi-company install -- only an
+    // admin's session can ever see another company's data, same gate the dashboard already uses.
+    const isSuperAdmin = req.user?.role === 'super_admin';
+    const includeAllCompanies = req.query.includeAllCompanies === 'true' && isSuperAdmin;
+    const companyId = includeAllCompanies ? null : req.user?.company_id;
+    if (!companyId && !includeAllCompanies) return res.status(400).json({ error: 'Company scope required.' });
 
     const accountIds = ((req.query.accountIds as string) || '').split(',').filter(Boolean);
     const asOfDate = req.query.asOfDate as string;
     const paymentUpto = req.query.paymentUpto as string;
     const groupBy = (req.query.groupBy as string) === 'broker' ? 'broker' : 'account';
     const dueOnly = req.query.dueOnly === 'true';
-    const overdueDaysThreshold = req.query.overdueDays ? Number(req.query.overdueDays) : undefined;
+    const overdueDaysThreshold = Number(req.query.overdueDays || 0);
+    const detailed = req.query.detailed !== 'false';
+    const state = (req.query.state as string) || undefined;
+    const city = (req.query.city as string) || undefined;
+    const brokerFilter = (req.query.broker as string) || undefined;
+    const includingPaidBills = req.query.includingPaidBills === 'true';
 
     const dateFormat = /^\d{4}-\d{2}-\d{2}$/;
     if (!accountIds.length || !dateFormat.test(asOfDate) || !dateFormat.test(paymentUpto)) {
       return res.status(400).json({ error: 'accountIds, asOfDate and paymentUpto (as YYYY-MM-DD) are required.' });
     }
-    if (overdueDaysThreshold !== undefined && Number.isNaN(overdueDaysThreshold)) {
-      return res.status(400).json({ error: 'overdueDays must be a number.' });
+    if (Number.isNaN(overdueDaysThreshold) || overdueDaysThreshold < 0) {
+      return res.status(400).json({ error: 'overdueDays must be a non-negative number (0 for all).' });
     }
 
     try {
-      const result = await reportsService.getOutstandingLedger(companyId, accountIds, asOfDate, paymentUpto, groupBy, dueOnly, overdueDaysThreshold);
+      const result = await reportsService.getOutstandingLedger(
+        companyId, accountIds, asOfDate, paymentUpto, groupBy, dueOnly, overdueDaysThreshold, detailed,
+        state, city, brokerFilter, includingPaidBills
+      );
       return res.json(result);
     } catch (error: any) {
       return res.status(500).json({ error: error.message });

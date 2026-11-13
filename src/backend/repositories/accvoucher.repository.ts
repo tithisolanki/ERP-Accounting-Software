@@ -144,11 +144,22 @@ export class AccVoucherRepository {
    * "asOfDate" limits which bills are considered; "paymentUpto" limits which receipts/payments
    * count against them — matching AC_PLUS's "Outstanding as on Date" + "Payment Including upto Date".
    */
-  async getOutstandingBillsForAccounts(companyId: string, accountIds: string[], asOfDate: string, paymentUpto: string): Promise<any[]> {
+  /**
+   * Debtors Outstanding Ledger (R6, debtors only -- AC_PLUS's ADEBOUTLEDGER form; the mirrored
+   * ACREOUTLEDGER "Creditors Outstanding Ledger" is a separate, unbuilt screen). companyId null
+   * + an admin caller means "Include All Companies". state/city/broker narrow by the account's
+   * own fields (falling back the same way the bill-level broker already does); includingPaidBills
+   * drops the normal "only unpaid" filter.
+   */
+  async getOutstandingBillsForAccounts(
+    companyId: string | null, accountIds: string[], asOfDate: string, paymentUpto: string,
+    filters: { state?: string; city?: string; broker?: string; includingPaidBills?: boolean } = {}
+  ): Promise<any[]> {
     const db = await getDb();
     const placeholders = accountIds.map(() => '?').join(',');
+    const { state, city, broker, includingPaidBills } = filters;
 
-    const sales = await db.all(
+    return db.all(
       `SELECT s.id AS billId, 'sale' AS billType, s.invoice_number AS billNumber, s.date,
               s.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName,
               COALESCE(NULLIF(s.broker_name, ''), a.broker) AS broker, s.credit_days,
@@ -157,28 +168,18 @@ export class AccVoucherRepository {
        JOIN accounts a ON a.id = s.customer_id
        LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id
        LEFT JOIN receipts rcpt ON rcpt.id = ra.receipt_id
-       WHERE s.company_id = ? AND s.customer_id IN (${placeholders}) AND s.date <= ?
+       WHERE (? IS NULL OR s.company_id = ?) AND s.customer_id IN (${placeholders}) AND s.date <= ?
+         AND (? IS NULL OR a.state = ?) AND (? IS NULL OR a.city = ?)
+         AND (? IS NULL OR COALESCE(NULLIF(s.broker_name, ''), a.broker) = ?)
        GROUP BY s.id
-       HAVING balanceDue > 0.005
+       HAVING ? = 1 OR balanceDue > 0.005
        ORDER BY s.date`,
-      [paymentUpto, companyId, ...accountIds, asOfDate]
+      [
+        paymentUpto, companyId, companyId, ...accountIds, asOfDate,
+        state || null, state || null, city || null, city || null, broker || null, broker || null,
+        includingPaidBills ? 1 : 0
+      ]
     );
-    const purchases = await db.all(
-      `SELECT p.id AS billId, 'purchase' AS billType, p.purchase_number AS billNumber, p.date,
-              p.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName,
-              COALESCE(NULLIF(p.broker_name, ''), a.broker) AS broker, p.credit_days,
-              p.total_amount - COALESCE(SUM(CASE WHEN pmt.date <= ? THEN pa.amount_applied + pa.discount_amount ELSE 0 END), 0) AS balanceDue
-       FROM purchases p
-       JOIN accounts a ON a.id = p.supplier_id
-       LEFT JOIN payment_allocations pa ON pa.purchase_id = p.id
-       LEFT JOIN payments pmt ON pmt.id = pa.payment_id
-       WHERE p.company_id = ? AND p.supplier_id IN (${placeholders}) AND p.date <= ?
-       GROUP BY p.id
-       HAVING balanceDue > 0.005
-       ORDER BY p.date`,
-      [paymentUpto, companyId, ...accountIds, asOfDate]
-    );
-    return [...sales, ...purchases].sort((a, b) => (a.date > b.date ? 1 : -1));
   }
 
   /**

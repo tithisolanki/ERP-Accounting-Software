@@ -116,16 +116,20 @@ export class ReportsService {
   }
 
   /**
-   * Outstanding & Ageing (R6 part 2): bills across several accounts, grouped by account or
-   * broker, with each bill's days-overdue (asOfDate - (bill date + the account's credit_days)).
-   * dueOnly keeps only bills past their credit days; overdueDaysThreshold (if given) raises that
-   * bar further, matching AC_PLUS's separate "Due Bills" and "Over Due Days" controls.
+   * Debtors Outstanding Ledger (R6, debtors only): bills across several accounts, grouped by
+   * account or broker, with each bill's days-overdue (asOfDate - (bill date + its own
+   * credit_days)). dueOnly is AC_PLUS's "All Bills / Due Bills" radio; overdueDaysThreshold is
+   * "Over Due Days (0 for all)" -- 0 means no threshold, matching that field's own label.
+   * detailed=false is "Summarised": only each group's total is returned, no bill rows.
    */
   async getOutstandingLedger(
-    companyId: string, accountIds: string[], asOfDate: string, paymentUpto: string,
-    groupBy: 'account' | 'broker', dueOnly: boolean, overdueDaysThreshold?: number
+    companyId: string | null, accountIds: string[], asOfDate: string, paymentUpto: string,
+    groupBy: 'account' | 'broker', dueOnly: boolean, overdueDaysThreshold: number, detailed: boolean,
+    state?: string, city?: string, brokerFilter?: string, includingPaidBills?: boolean
   ) {
-    const bills = await accVoucherRepository.getOutstandingBillsForAccounts(companyId, accountIds, asOfDate, paymentUpto);
+    const bills = await accVoucherRepository.getOutstandingBillsForAccounts(companyId, accountIds, asOfDate, paymentUpto, {
+      state, city, broker: brokerFilter, includingPaidBills
+    });
     const asOf = new Date(asOfDate).getTime();
 
     const aged = bills
@@ -136,7 +140,7 @@ export class ReportsService {
         return { ...b, dueDate: dueDate.toISOString().split('T')[0], overdueDays };
       })
       .filter(b => !dueOnly || b.overdueDays > 0)
-      .filter(b => overdueDaysThreshold == null || b.overdueDays >= overdueDaysThreshold);
+      .filter(b => !overdueDaysThreshold || b.overdueDays >= overdueDaysThreshold);
 
     // Grouped by accountId (not name, which two accounts could share); broker groups by the
     // broker string itself since there's no separate broker id to key on here.
@@ -148,13 +152,10 @@ export class ReportsService {
       groups.get(key)!.bills.push(bill);
     }
 
-    // Receivable (sales) and payable (purchases) are kept separate -- summing them into one
-    // "total outstanding" would mean nothing once a group has both, or both are selected.
     return Array.from(groups.values()).map(({ groupName, bills: groupBills }) => ({
       groupName,
-      bills: groupBills,
-      totalReceivable: groupBills.filter(b => b.billType === 'sale').reduce((sum, b) => sum + b.balanceDue, 0),
-      totalPayable: groupBills.filter(b => b.billType === 'purchase').reduce((sum, b) => sum + b.balanceDue, 0)
+      bills: detailed ? groupBills : [],
+      totalOutstanding: groupBills.reduce((sum, b) => sum + b.balanceDue, 0)
     }));
   }
 

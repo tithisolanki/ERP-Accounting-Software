@@ -102,7 +102,7 @@ export const reportsSidebarItems = [
 // (MnuDebtorsRepors -> ... -> MnuOutStanding -> ... -> MnuOverDueInterest), not flat
 // under plain Reports -- confirmed via its menu resource strings.
 export const debtorReportsSidebarItems = [
-  { id: 'outstanding_ledger', name: 'Outstanding & Ageing' },
+  { id: 'outstanding_ledger', name: 'Debtors Outstanding Ledger' },
   { id: 'overdue_interest', name: 'Overdue Interest' }
 ];
 

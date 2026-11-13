@@ -45,15 +45,22 @@ export const ReportsService = {
 
   async getOutstandingLedger(token: string, filters: {
     accountIds: string[]; asOfDate: string; paymentUpto: string;
-    groupBy: 'account' | 'broker'; dueOnly: boolean; overdueDays?: number;
-  }): Promise<{ groupName: string; bills: any[]; totalReceivable: number; totalPayable: number }[]> {
+    groupBy: 'account' | 'broker'; dueOnly: boolean; overdueDays?: number; detailed?: boolean;
+    state?: string; city?: string; broker?: string; includingPaidBills?: boolean; includeAllCompanies?: boolean;
+  }): Promise<{ groupName: string; bills: any[]; totalOutstanding: number }[]> {
     const query = new URLSearchParams({
       accountIds: filters.accountIds.join(','),
       asOfDate: filters.asOfDate,
       paymentUpto: filters.paymentUpto,
       groupBy: filters.groupBy,
       dueOnly: String(filters.dueOnly),
-      ...(filters.overdueDays != null ? { overdueDays: String(filters.overdueDays) } : {})
+      ...(filters.overdueDays != null ? { overdueDays: String(filters.overdueDays) } : {}),
+      ...(filters.detailed != null ? { detailed: String(filters.detailed) } : {}),
+      ...(filters.state ? { state: filters.state } : {}),
+      ...(filters.city ? { city: filters.city } : {}),
+      ...(filters.broker ? { broker: filters.broker } : {}),
+      ...(filters.includingPaidBills ? { includingPaidBills: String(filters.includingPaidBills) } : {}),
+      ...(filters.includeAllCompanies ? { includeAllCompanies: String(filters.includeAllCompanies) } : {})
     }).toString();
     return apiFetch(`/api/reports/outstanding-ledger?${query}`, token);
   },

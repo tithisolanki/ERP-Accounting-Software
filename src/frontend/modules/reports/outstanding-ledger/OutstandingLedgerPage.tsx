@@ -9,8 +9,9 @@ import { AccountMultiSelect } from '../../../components/AccountMultiSelect';
 import { Scale } from 'lucide-react';
 
 export const OutstandingLedgerPage: React.FC = () => {
-  const { token, loginDate, addNotification } = useStore();
+  const { token, user, loginDate, addNotification } = useStore();
   const today = loginDate || new Date().toISOString().split('T')[0];
+  const isSuperAdmin = user?.role === 'super_admin';
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
@@ -19,8 +20,14 @@ export const OutstandingLedgerPage: React.FC = () => {
   const [paymentUpto, setPaymentUpto] = useState(today);
   const [groupBy, setGroupBy] = useState<'account' | 'broker'>('account');
   const [dueOnly, setDueOnly] = useState(false);
-  const [overdueDays, setOverdueDays] = useState('');
-  const [outstandingGroups, setOutstandingGroups] = useState<{ groupName: string; bills: any[]; totalReceivable: number; totalPayable: number }[]>([]);
+  const [detailed, setDetailed] = useState(true);
+  const [overdueDays, setOverdueDays] = useState('0');
+  const [state, setState] = useState('');
+  const [city, setCity] = useState('');
+  const [broker, setBroker] = useState('');
+  const [includingPaidBills, setIncludingPaidBills] = useState(false);
+  const [includeAllCompanies, setIncludeAllCompanies] = useState(false);
+  const [outstandingGroups, setOutstandingGroups] = useState<{ groupName: string; bills: any[]; totalOutstanding: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -36,8 +43,10 @@ export const OutstandingLedgerPage: React.FC = () => {
     setLoading(true);
     try {
       const result = await ReportsService.getOutstandingLedger(token, {
-        accountIds: selectedAccountIds, asOfDate, paymentUpto, groupBy, dueOnly,
-        overdueDays: overdueDays ? Number(overdueDays) : undefined
+        accountIds: selectedAccountIds, asOfDate, paymentUpto, groupBy, dueOnly, detailed,
+        overdueDays: Number(overdueDays || 0),
+        state: state || undefined, city: city || undefined, broker: broker || undefined,
+        includingPaidBills, includeAllCompanies: isSuperAdmin ? includeAllCompanies : undefined
       });
       setOutstandingGroups(result);
     } catch (err: any) {
@@ -49,7 +58,7 @@ export const OutstandingLedgerPage: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-5 select-none text-xs max-w-4xl">
-      <Card title="Outstanding & Ageing" subtitle="Debtors/Creditors Outstanding Ledger — bill-wise, by account or by broker">
+      <Card title="Debtors Outstanding Ledger" subtitle="Bill-wise outstanding, by account or by broker">
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
@@ -64,6 +73,24 @@ export const OutstandingLedgerPage: React.FC = () => {
             </div>
           </div>
 
+          <div className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] uppercase font-bold text-slate-500">State</label>
+              <input type="text" value={state} onChange={(e) => setState(e.target.value)} placeholder="Any"
+                className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] uppercase font-bold text-slate-500">City</label>
+              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Any"
+                className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] uppercase font-bold text-slate-500">Broker Name</label>
+              <input type="text" value={broker} onChange={(e) => setBroker(e.target.value)} placeholder="Any"
+                className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs" />
+            </div>
+          </div>
+
           <div className="grid grid-cols-3 gap-4 items-end">
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] uppercase font-bold text-slate-500">Outstanding Type</label>
@@ -74,14 +101,50 @@ export const OutstandingLedgerPage: React.FC = () => {
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] uppercase font-bold text-slate-500">Over Due Days (optional)</label>
-              <input type="number" value={overdueDays} onChange={(e) => setOverdueDays(e.target.value)} placeholder="e.g. 30"
+              <label className="text-[11px] uppercase font-bold text-slate-500">Over Due Days (0 for all)</label>
+              <input type="number" value={overdueDays} onChange={(e) => setOverdueDays(e.target.value)}
                 className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs" />
             </div>
-            <label className="flex items-center gap-2 font-bold text-slate-700 cursor-pointer select-none pb-2">
-              <input type="checkbox" checked={dueOnly} onChange={(e) => setDueOnly(e.target.checked)} className="w-4 h-4 rounded accent-indigo-650 cursor-pointer" />
-              Due Bills only
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 font-bold text-slate-700">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="radio" name="billFilter" checked={!dueOnly} onChange={() => setDueOnly(false)} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
+                All Bills
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="radio" name="billFilter" checked={dueOnly} onChange={() => setDueOnly(true)} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
+                Due Bills
+              </label>
+            </div>
+            <div className="flex items-center gap-4 font-bold text-slate-700">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="radio" name="detailLevel" checked={detailed} onChange={() => setDetailed(true)} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
+                Detailed
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="radio" name="detailLevel" checked={!detailed} onChange={() => setDetailed(false)} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
+                Summarised
+              </label>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 font-bold text-slate-700 cursor-pointer select-none">
+              <input type="checkbox" checked={includingPaidBills} onChange={(e) => setIncludingPaidBills(e.target.checked)} className="w-4 h-4 rounded accent-indigo-650 cursor-pointer" />
+              Including Paid Bills
             </label>
+            <label className="flex items-center gap-2 font-bold text-slate-700 cursor-not-allowed select-none opacity-70" title="This report always ages a bill from its own bill date — shown for parity with AC_PLUS, no second mode exists.">
+              <input type="checkbox" checked readOnly className="w-4 h-4 rounded accent-indigo-650 cursor-not-allowed" />
+              Overdue by Bill Date
+            </label>
+            {isSuperAdmin && (
+              <label className="flex items-center gap-2 font-bold text-slate-700 cursor-pointer select-none">
+                <input type="checkbox" checked={includeAllCompanies} onChange={(e) => setIncludeAllCompanies(e.target.checked)} className="w-4 h-4 rounded accent-indigo-650 cursor-pointer" />
+                Include All Companies
+              </label>
+            )}
           </div>
 
           <AccountMultiSelect accounts={accounts} groups={groups} selectedIds={selectedAccountIds} onChange={setSelectedAccountIds} />
@@ -95,11 +158,10 @@ export const OutstandingLedgerPage: React.FC = () => {
 
       {outstandingGroups.map((group, i) => (
         <Card key={`${group.groupName}-${i}`} title={group.groupName}
-          subtitle={`Receivable: ${formatCurrency(group.totalReceivable)}  |  Payable: ${formatCurrency(group.totalPayable)}`}>
-          <Table headers={['Bill Type', 'Bill No.', 'Date', 'Due Date', 'Overdue Days', 'Amount', 'Balance Due']}>
+          subtitle={`Outstanding: ${formatCurrency(group.totalOutstanding)}`}>
+          <Table headers={['Bill No.', 'Date', 'Due Date', 'Overdue Days', 'Amount', 'Balance Due']}>
             {group.bills.map((bill: any) => (
               <tr key={bill.billId} className="border-b border-slate-100 last:border-0">
-                <td className="px-4 py-2 capitalize">{bill.billType}</td>
                 <td className="px-4 py-2">{bill.billNumber}</td>
                 <td className="px-4 py-2">{bill.date}</td>
                 <td className="px-4 py-2">{bill.dueDate}</td>
