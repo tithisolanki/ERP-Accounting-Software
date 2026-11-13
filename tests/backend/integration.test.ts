@@ -332,6 +332,38 @@ async function runTests() {
 
     await companyService.updateCompany(company.id, { ...actor, company_id: company.id }, { pnl_closing_account_id: capitalAccountId });
 
+    console.log('\nTest 16: getAccountLedger filters by date range without losing the pre-range running balance...');
+    const now16 = new Date().toISOString();
+    const ledgerTestAccountId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, opening_balance_dc, group_name, is_dirty, updated_at) VALUES (?, ?, 'Ledger Test Account', 0, 'DR', 'Sundry Debtors', 0, ?)`, [ledgerTestAccountId, company.id, now16]);
+
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'journal', voucherDate: '2026-01-01', voucherNo: 'JV-LT1', voucherType: 'Journal', isNew: true,
+      lines: [{ accountId: ledgerTestAccountId, debitAmount: 100 }, { accountId: customer.id, creditAmount: 100 }]
+    });
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'journal', voucherDate: '2026-06-01', voucherNo: 'JV-LT2', voucherType: 'Journal', isNew: true,
+      lines: [{ accountId: ledgerTestAccountId, debitAmount: 50 }, { accountId: customer.id, creditAmount: 50 }]
+    });
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'journal', voucherDate: '2026-12-01', voucherNo: 'JV-LT3', voucherType: 'Journal', isNew: true,
+      lines: [{ accountId: ledgerTestAccountId, debitAmount: 25 }, { accountId: customer.id, creditAmount: 25 }]
+    });
+
+    const rangedLedger = await reportsService.getAccountLedger(company.id, ledgerTestAccountId, '2026-05-01', '2026-07-01');
+    check('Only the in-range posting is returned', rangedLedger.ledger.length === 1 && rangedLedger.ledger[0].debit === 50, JSON.stringify(rangedLedger.ledger));
+    check('Opening balance reflects the pre-range posting (100)', rangedLedger.openingBalance === 100, String(rangedLedger.openingBalance));
+    check('Closing balance excludes the after-range posting (100+50, not +25)', rangedLedger.closingBalance === 150, String(rangedLedger.closingBalance));
+
+    const unrangedLedger = await reportsService.getAccountLedger(company.id, ledgerTestAccountId);
+    check('No date args still returns full history (backward compatible)', unrangedLedger.ledger.length === 3 && unrangedLedger.closingBalance === 175, JSON.stringify({ len: unrangedLedger.ledger.length, closing: unrangedLedger.closingBalance }));
+
+    const emptyRangeLedger = await reportsService.getAccountLedger(company.id, ledgerTestAccountId, '2030-01-01', '2030-12-31');
+    check('A range with no activity returns zero rows with opening = closing', emptyRangeLedger.ledger.length === 0 && emptyRangeLedger.openingBalance === emptyRangeLedger.closingBalance, JSON.stringify(emptyRangeLedger));
+
+    const excelExport = await reportsService.exportExcel(company.id, 'ledger', ledgerTestAccountId);
+    check('exportExcel\'s existing 2-arg caller still works unchanged', excelExport.buffer.length > 0);
+
     await closeDb();
     console.log('\nDatabase closed.');
 

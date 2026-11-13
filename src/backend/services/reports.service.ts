@@ -68,7 +68,7 @@ export class ReportsService {
    * closing balance here always matches that account's line in the trial balance.
    * Balance is shown on the account's natural side: credit-nature groups count Cr - Dr.
    */
-  async getAccountLedger(companyId: string, accountId: string) {
+  async getAccountLedger(companyId: string, accountId: string, startDate?: string, endDate?: string) {
     const account = await reportsRepository.getAccountWithPrimaryGroup(companyId, accountId);
     if (!account) throw new Error('Account not found.');
 
@@ -77,15 +77,23 @@ export class ReportsService {
     const openingNetDr = (account.opening_balance_dc === 'CR' ? -1 : 1) * (account.opening_balance || 0);
 
     let runningNetDr = openingNetDr;
+    let openingNetDrAtRangeStart = openingNetDr;
     const postings = await reportsRepository.getAccountPostings(companyId, accountId);
-    const ledgerRows = postings.map(({ ord, ...p }) => {
+    const ledgerRows: any[] = [];
+    for (const { ord, ...p } of postings) {
+      if (endDate && p.date > endDate) break;
+      if (startDate && p.date < startDate) {
+        runningNetDr += p.debit - p.credit;
+        openingNetDrAtRangeStart = runningNetDr;
+        continue;
+      }
       runningNetDr += p.debit - p.credit;
-      return { ...p, balance: sign * runningNetDr };
-    });
+      ledgerRows.push({ ...p, balance: sign * runningNetDr });
+    }
 
     return {
       account,
-      openingBalance: sign * openingNetDr,
+      openingBalance: sign * openingNetDrAtRangeStart,
       closingBalance: sign * runningNetDr,
       ledger: ledgerRows
     };

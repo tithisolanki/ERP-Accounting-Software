@@ -22,7 +22,9 @@ export class ReportsController {
     if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
 
     try {
-      const result = await reportsService.getAccountLedger(companyId, accountId);
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const result = await reportsService.getAccountLedger(companyId, accountId, startDate, endDate);
       return res.json(result);
     } catch (error: any) {
       const status = error.message.includes('not found') ? 404 : 500;
