@@ -181,6 +181,34 @@ export class AccVoucherRepository {
     return [...sales, ...purchases].sort((a, b) => (a.date > b.date ? 1 : -1));
   }
 
+  /**
+   * Sales bills (debtors only -- R19's AC_PLUS screen is confirmed Debtors-Reports-only, no
+   * Creditors side) with each bill's payments split by whether they landed before or on/after
+   * that BILL's own due date (bill date + its own credit_days, varies bill to bill), for the
+   * Overdue Interest report's "Include Payment before due date" toggle.
+   */
+  async getOverdueBillsWithPaymentSplit(companyId: string, accountIds: string[], reportDate: string, periodStart: string, periodEnd: string): Promise<any[]> {
+    const db = await getDb();
+    const placeholders = accountIds.map(() => '?').join(',');
+
+    return db.all(
+      `SELECT s.id AS billId, s.invoice_number AS billNumber, s.date,
+              s.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName,
+              COALESCE(NULLIF(s.broker_name, ''), a.broker) AS broker, s.credit_days,
+              date(s.date, '+' || s.credit_days || ' days') AS dueDate,
+              COALESCE(SUM(CASE WHEN rcpt.date BETWEEN ? AND ? AND rcpt.date < date(s.date, '+' || s.credit_days || ' days') THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0) AS paidBeforeDue,
+              COALESCE(SUM(CASE WHEN rcpt.date BETWEEN ? AND ? AND rcpt.date >= date(s.date, '+' || s.credit_days || ' days') THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0) AS paidOnOrAfterDue
+       FROM sales s
+       JOIN accounts a ON a.id = s.customer_id
+       LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id
+       LEFT JOIN receipts rcpt ON rcpt.id = ra.receipt_id
+       WHERE s.company_id = ? AND s.customer_id IN (${placeholders}) AND s.date <= ?
+       GROUP BY s.id
+       ORDER BY s.date`,
+      [periodStart, periodEnd, periodStart, periodEnd, companyId, ...accountIds, reportDate]
+    );
+  }
+
   /** Previously saved bill allocations for a set of receipt/payment row ids, keyed by that row's own id. */
   async getAllocationsForLines(companyId: string, kind: 'receipt' | 'payment', lineIds: string[]): Promise<{ lineId: string; billId: string; amount: number; discount: number }[]> {
     if (lineIds.length === 0) return [];

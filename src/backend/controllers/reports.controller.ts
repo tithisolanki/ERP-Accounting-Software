@@ -79,6 +79,38 @@ export class ReportsController {
     }
   }
 
+  async getOverdueInterest(req: AuthenticatedRequest, res: Response) {
+    const companyId = req.user?.company_id;
+    if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
+
+    const accountIds = ((req.query.accountIds as string) || '').split(',').filter(Boolean);
+    const reportDate = req.query.reportDate as string;
+    const periodStart = req.query.periodStart as string;
+    const periodEnd = req.query.periodEnd as string;
+    const interestRate = Number(req.query.interestRate);
+    const maxDaysOfYear = Number(req.query.maxDaysOfYear);
+    const includeEarlyPayments = req.query.includeEarlyPayments === 'true';
+    const groupBy = (req.query.groupBy as string) === 'broker' ? 'broker' : 'account';
+
+    const dateFormat = /^\d{4}-\d{2}-\d{2}$/;
+    if (!accountIds.length || !dateFormat.test(reportDate) || !dateFormat.test(periodStart) || !dateFormat.test(periodEnd)) {
+      return res.status(400).json({ error: 'accountIds, reportDate, periodStart and periodEnd (as YYYY-MM-DD) are required.' });
+    }
+    if (Number.isNaN(interestRate) || interestRate <= 0) {
+      return res.status(400).json({ error: 'interestRate must be a positive number.' });
+    }
+    if (maxDaysOfYear !== 360 && maxDaysOfYear !== 365) {
+      return res.status(400).json({ error: 'maxDaysOfYear must be 360 or 365.' });
+    }
+
+    try {
+      const result = await reportsService.getOverdueInterestReport(companyId, accountIds, reportDate, periodStart, periodEnd, interestRate, maxDaysOfYear as 360 | 365, includeEarlyPayments, groupBy);
+      return res.json(result);
+    } catch (error: any) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   async getAccountsByGroup(req: AuthenticatedRequest, res: Response) {
     const companyId = req.user?.company_id;
     const name = req.query.name as string;

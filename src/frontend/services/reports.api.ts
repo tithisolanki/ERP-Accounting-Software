@@ -56,5 +56,22 @@ export const ReportsService = {
       ...(filters.overdueDays != null ? { overdueDays: String(filters.overdueDays) } : {})
     }).toString();
     return apiFetch(`/api/reports/outstanding-ledger?${query}`, token);
+  },
+
+  async getOverdueInterest(token: string, filters: {
+    accountIds: string[]; reportDate: string; periodStart: string; periodEnd: string;
+    interestRate: number; maxDaysOfYear: 360 | 365; includeEarlyPayments: boolean; groupBy: 'account' | 'broker';
+  }): Promise<{ groupName: string; bills: any[]; totalInterest: number }[]> {
+    const query = new URLSearchParams({
+      accountIds: filters.accountIds.join(','),
+      reportDate: filters.reportDate,
+      periodStart: filters.periodStart,
+      periodEnd: filters.periodEnd,
+      interestRate: String(filters.interestRate),
+      maxDaysOfYear: String(filters.maxDaysOfYear),
+      includeEarlyPayments: String(filters.includeEarlyPayments),
+      groupBy: filters.groupBy
+    }).toString();
+    return apiFetch(`/api/reports/overdue-interest?${query}`, token);
   }
 };

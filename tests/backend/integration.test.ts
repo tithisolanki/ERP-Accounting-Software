@@ -3,6 +3,7 @@ import { reportsService } from '../../src/backend/services/reports.service';
 import { salesService } from '../../src/backend/services/sales.service';
 import { purchaseService } from '../../src/backend/services/purchase.service';
 import { accVoucherService } from '../../src/backend/services/accvoucher.service';
+import { accVoucherRepository } from '../../src/backend/repositories/accvoucher.repository';
 import { receiptService } from '../../src/backend/services/cashflow.service';
 import { companyService } from '../../src/backend/services/masters.service';
 import { generateLedgerPdf } from '../../src/backend/services/pdf.service';
@@ -452,6 +453,64 @@ async function runTests() {
 
     const dueOnlyExcluded = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-01-05', '2026-01-05', 'account', true);
     check('Due-only filter excludes a bill not yet past its credit days', dueOnlyExcluded.length === 0, JSON.stringify(dueOnlyExcluded));
+
+    console.log('\nTest 20: getOverdueBillsWithPaymentSplit splits payments by whether they landed before or on/after the BILL\'s own due date, and getOverdueInterestReport applies simple interest...');
+    const now20 = new Date().toISOString();
+    const interestCustomerId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Interest Test Account', 0, 'Sundry Debtors', 0, ?)`, [interestCustomerId, company.id, now20]);
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9401, date: '2026-01-01', customerId: interestCustomerId, financialYear: '2025-26', creditDays: 30, brokerName: 'Mahesh Broker',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 100, rate: 100, gstPercentage: 5 }]
+    });
+    const saleB = await db.get('SELECT id FROM sales WHERE invoice_number = 9401 AND company_id = ?', [company.id]);
+    // Due date = 2026-01-31. This payment lands BEFORE it.
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'receipt', voucherDate: '2026-01-15', voucherNo: 'RCPT-INT1', bankAccountName: 'Test Bank', isNew: true,
+      lines: [{ accountId: interestCustomerId, amount: 2000, allocations: [{ billId: saleB.id, amount: 2000 }] }]
+    });
+
+    // A zero-credit-days bill: due date must equal the bill's own date, not crash or null out.
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9402, date: '2026-02-01', customerId: interestCustomerId, financialYear: '2025-26', creditDays: 0,
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+    // A separate bill whose only payment lands EXACTLY on its own due date (Jan 1 + 10d = Jan 11).
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9403, date: '2026-01-01', customerId: interestCustomerId, financialYear: '2025-26', creditDays: 10,
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+    const saleC = await db.get('SELECT id FROM sales WHERE invoice_number = 9403 AND company_id = ?', [company.id]);
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'receipt', voucherDate: '2026-01-11', voucherNo: 'RCPT-INT2', bankAccountName: 'Test Bank', isNew: true,
+      lines: [{ accountId: interestCustomerId, amount: 1000, allocations: [{ billId: saleC.id, amount: 1000 }] }]
+    });
+
+    const split = await accVoucherRepository.getOverdueBillsWithPaymentSplit(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01');
+    const billA = split.find((b: any) => b.billNumber === 9401);
+    const billB = split.find((b: any) => b.billNumber === 9402);
+    const billC = split.find((b: any) => b.billNumber === 9403);
+    check('Due date computed from the bill\'s own credit_days (Jan 1 + 30d = Jan 31)', billA?.dueDate === '2026-01-31', JSON.stringify(billA));
+    check('Payment dated before the due date lands in paidBeforeDue, not paidOnOrAfterDue', billA?.paidBeforeDue === 2000 && billA?.paidOnOrAfterDue === 0, JSON.stringify(billA));
+    check('credit_days=0 gives a due date equal to the bill\'s own date, not a crash or null', billB?.dueDate === '2026-02-01', JSON.stringify(billB));
+    check('A payment dated EXACTLY on the due date counts as paidOnOrAfterDue, not paidBeforeDue', billC?.paidOnOrAfterDue === 1000 && billC?.paidBeforeDue === 0, JSON.stringify(billC));
+
+    const withEarly = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, true, 'broker');
+    const billWithEarly = withEarly.find(g => g.groupName === 'Mahesh Broker')?.bills[0];
+    check('overdueDays = Jan 31 to Apr 1 = 60 days', billWithEarly?.overdueDays === 60, String(billWithEarly?.overdueDays));
+    check('includeEarlyPayments=true nets the early payment: principal 10500-2000=8500, interest = 8500*0.18*60/365 = 251.51',
+      billWithEarly?.principal === 8500 && billWithEarly?.interest === 251.51, JSON.stringify(billWithEarly));
+
+    const withoutEarly = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, false, 'broker');
+    const billWithoutEarly = withoutEarly.find(g => g.groupName === 'Mahesh Broker')?.bills[0];
+    check('includeEarlyPayments=false ignores the early payment: principal stays 10500, interest = 10500*0.18*60/365 = 310.68',
+      billWithoutEarly?.principal === 10500 && billWithoutEarly?.interest === 310.68, JSON.stringify(billWithoutEarly));
+
+    const with360 = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 360, true, 'broker');
+    const bill360 = with360.find(g => g.groupName === 'Mahesh Broker')?.bills[0];
+    check('maxDaysOfYear changes the result: 365-day basis gives 251.51, 360-day basis gives exactly 255.00',
+      bill360?.interest === 255, String(bill360?.interest));
+
+    check('Grouped under the bill\'s own broker (Mahesh Broker), not an account-level one', withEarly.some(g => g.groupName === 'Mahesh Broker'));
 
     await closeDb();
     console.log('\nDatabase closed.');

@@ -158,6 +158,46 @@ export class ReportsService {
     }));
   }
 
+  /**
+   * Overdue Interest (R19, debtors only): simple interest on each overdue sale bill's
+   * principal. "includeEarlyPayments" toggles whether a payment made before the bill's own
+   * due date reduces that principal, or is ignored (AC_PLUS's "Include Payment before due
+   * date"). Grouped by account or broker, same pattern as getOutstandingLedger.
+   */
+  async getOverdueInterestReport(
+    companyId: string, accountIds: string[], reportDate: string, periodStart: string, periodEnd: string,
+    interestRatePercent: number, maxDaysOfYear: 360 | 365, includeEarlyPayments: boolean, groupBy: 'account' | 'broker'
+  ) {
+    const bills = await accVoucherRepository.getOverdueBillsWithPaymentSplit(companyId, accountIds, reportDate, periodStart, periodEnd);
+    const asOf = new Date(reportDate).getTime();
+
+    const withInterest = bills
+      .map(b => {
+        const dueDate = new Date(b.dueDate);
+        const overdueDays = Math.floor((asOf - dueDate.getTime()) / 86400000);
+        const principal = includeEarlyPayments
+          ? b.totalAmount - b.paidBeforeDue - b.paidOnOrAfterDue
+          : b.totalAmount - b.paidOnOrAfterDue;
+        const interest = Math.round(Math.max(principal, 0) * (interestRatePercent / 100) * overdueDays / maxDaysOfYear * 100) / 100;
+        return { ...b, overdueDays, principal, interest };
+      })
+      .filter(b => b.overdueDays > 0);
+
+    const groups = new Map<string, { groupName: string; bills: any[] }>();
+    for (const bill of withInterest) {
+      const key = groupBy === 'broker' ? (bill.broker || '(No Broker)') : bill.accountId;
+      const groupName = groupBy === 'broker' ? (bill.broker || '(No Broker)') : bill.accountName;
+      if (!groups.has(key)) groups.set(key, { groupName, bills: [] });
+      groups.get(key)!.bills.push(bill);
+    }
+
+    return Array.from(groups.values()).map(({ groupName, bills: groupBills }) => ({
+      groupName,
+      bills: groupBills,
+      totalInterest: groupBills.reduce((sum, b) => sum + b.interest, 0)
+    }));
+  }
+
   async getGstReport(companyId: string) {
     const companyState = await reportsRepository.getCompanyState(companyId);
 

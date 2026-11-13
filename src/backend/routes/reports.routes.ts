@@ -30,6 +30,11 @@ router.get('/party-ledger-pdf', authenticateJWT, (req, res) => reportsController
 router.get('/outstanding-ledger', authenticateJWT, (req, res) => reportsController.getOutstandingLedger(req, res));
 
 // ==========================================
+// 2e. Overdue Interest (debtors only)
+// ==========================================
+router.get('/overdue-interest', authenticateJWT, (req, res) => reportsController.getOverdueInterest(req, res));
+
+// ==========================================
 // 3. GST Summary Report
 // ==========================================
 router.get('/gst', authenticateJWT, (req, res) => reportsController.getGstReport(req, res));

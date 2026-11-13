@@ -96,7 +96,8 @@ export const misreportsSidebarItems = [
 // Ledger under plain Reports (confirmed via its menu resource strings).
 export const reportsSidebarItems = [
   { id: 'party_ledger', name: 'Party Ledger' },
-  { id: 'outstanding_ledger', name: 'Outstanding & Ageing' }
+  { id: 'outstanding_ledger', name: 'Outstanding & Ageing' },
+  { id: 'overdue_interest', name: 'Overdue Interest' }
 ];
 
 export const quickAccessItems = [
