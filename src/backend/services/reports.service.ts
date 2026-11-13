@@ -138,17 +138,23 @@ export class ReportsService {
       .filter(b => !dueOnly || b.overdueDays > 0)
       .filter(b => overdueDaysThreshold == null || b.overdueDays >= overdueDaysThreshold);
 
-    const groups = new Map<string, any[]>();
+    // Grouped by accountId (not name, which two accounts could share); broker groups by the
+    // broker string itself since there's no separate broker id to key on here.
+    const groups = new Map<string, { groupName: string; bills: any[] }>();
     for (const bill of aged) {
-      const key = groupBy === 'broker' ? (bill.broker || '(No Broker)') : bill.accountName;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(bill);
+      const key = groupBy === 'broker' ? (bill.broker || '(No Broker)') : bill.accountId;
+      const groupName = groupBy === 'broker' ? (bill.broker || '(No Broker)') : bill.accountName;
+      if (!groups.has(key)) groups.set(key, { groupName, bills: [] });
+      groups.get(key)!.bills.push(bill);
     }
 
-    return Array.from(groups.entries()).map(([groupName, groupBills]) => ({
+    // Receivable (sales) and payable (purchases) are kept separate -- summing them into one
+    // "total outstanding" would mean nothing once a group has both, or both are selected.
+    return Array.from(groups.values()).map(({ groupName, bills: groupBills }) => ({
       groupName,
       bills: groupBills,
-      totalOutstanding: groupBills.reduce((sum, b) => sum + b.balanceDue, 0)
+      totalReceivable: groupBills.filter(b => b.billType === 'sale').reduce((sum, b) => sum + b.balanceDue, 0),
+      totalPayable: groupBills.filter(b => b.billType === 'purchase').reduce((sum, b) => sum + b.balanceDue, 0)
     }));
   }
 

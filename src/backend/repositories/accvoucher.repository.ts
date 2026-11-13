@@ -150,7 +150,8 @@ export class AccVoucherRepository {
 
     const sales = await db.all(
       `SELECT s.id AS billId, 'sale' AS billType, s.invoice_number AS billNumber, s.date,
-              s.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName, a.broker, a.credit_days,
+              s.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName,
+              COALESCE(NULLIF(s.broker_name, ''), a.broker) AS broker, s.credit_days,
               s.total_amount - COALESCE(SUM(CASE WHEN rcpt.date <= ? THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0) AS balanceDue
        FROM sales s
        JOIN accounts a ON a.id = s.customer_id
@@ -164,7 +165,8 @@ export class AccVoucherRepository {
     );
     const purchases = await db.all(
       `SELECT p.id AS billId, 'purchase' AS billType, p.purchase_number AS billNumber, p.date,
-              p.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName, a.broker, a.credit_days,
+              p.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName,
+              COALESCE(NULLIF(p.broker_name, ''), a.broker) AS broker, p.credit_days,
               p.total_amount - COALESCE(SUM(CASE WHEN pmt.date <= ? THEN pa.amount_applied + pa.discount_amount ELSE 0 END), 0) AS balanceDue
        FROM purchases p
        JOIN accounts a ON a.id = p.supplier_id

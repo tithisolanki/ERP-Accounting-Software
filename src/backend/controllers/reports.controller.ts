@@ -63,8 +63,12 @@ export class ReportsController {
     const dueOnly = req.query.dueOnly === 'true';
     const overdueDaysThreshold = req.query.overdueDays ? Number(req.query.overdueDays) : undefined;
 
-    if (!accountIds.length || !asOfDate || !paymentUpto) {
-      return res.status(400).json({ error: 'accountIds, asOfDate and paymentUpto are required.' });
+    const dateFormat = /^\d{4}-\d{2}-\d{2}$/;
+    if (!accountIds.length || !dateFormat.test(asOfDate) || !dateFormat.test(paymentUpto)) {
+      return res.status(400).json({ error: 'accountIds, asOfDate and paymentUpto (as YYYY-MM-DD) are required.' });
+    }
+    if (overdueDaysThreshold !== undefined && Number.isNaN(overdueDaysThreshold)) {
+      return res.status(400).json({ error: 'overdueDays must be a number.' });
     }
 
     try {

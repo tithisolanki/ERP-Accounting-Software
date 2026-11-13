@@ -1,6 +1,7 @@
 import { getDb, initDb, closeDb } from '../../src/backend/db';
 import { reportsService } from '../../src/backend/services/reports.service';
 import { salesService } from '../../src/backend/services/sales.service';
+import { purchaseService } from '../../src/backend/services/purchase.service';
 import { accVoucherService } from '../../src/backend/services/accvoucher.service';
 import { receiptService } from '../../src/backend/services/cashflow.service';
 import { companyService } from '../../src/backend/services/masters.service';
@@ -406,19 +407,48 @@ async function runTests() {
     check('Unknown account id is rejected, not silently skipped',
       await rejects(() => reportsService.getPartyLedgerPdf(company.id, [ledgerTestAccountId, crypto.randomUUID()], '2026-01-01', '2026-12-31'), 'not found'));
 
-    console.log('\nTest 19: Outstanding & Ageing computes overdue days, groups by broker, and the Due-only filter works...');
+    console.log('\nTest 19: Outstanding & Ageing ages on the BILL\'s own credit_days/broker (falling back to the account\'s), nets partial payments only up to paymentUpto, and groups by broker...');
     const now19 = new Date().toISOString();
     const outstandingCustomerId = crypto.randomUUID();
+    const outstandingSupplierId = crypto.randomUUID();
+    // Account-level credit_days/broker deliberately differ from the bill's own, to prove the
+    // bill's own values win (Sale A has no broker_name, so it falls back to the account's).
     await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, credit_days, broker, is_dirty, updated_at) VALUES (?, ?, 'Overdue Customer', 0, 'Sundry Debtors', 30, 'Ramesh Broker', 0, ?)`, [outstandingCustomerId, company.id, now19]);
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, credit_days, broker, is_dirty, updated_at) VALUES (?, ?, 'Overdue Supplier', 0, 'Sundry Creditors', 0, NULL, 0, ?)`, [outstandingSupplierId, company.id, now19]);
+
     await salesService.createSale(company.id, actor, {
-      invoiceNumber: 9201, date: '2026-01-01', customerId: outstandingCustomerId, financialYear: '2025-26',
+      invoiceNumber: 9201, date: '2026-01-01', customerId: outstandingCustomerId, financialYear: '2025-26', creditDays: 45,
       items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 100, rate: 100, gstPercentage: 5 }]
     });
+    const saleA = await db.get('SELECT id FROM sales WHERE invoice_number = 9201 AND company_id = ?', [company.id]);
 
-    const agedLedger = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-06-01', 'broker', true, 20);
-    check('Overdue bill grouped under its broker', agedLedger.length === 1 && agedLedger[0].groupName === 'Ramesh Broker', JSON.stringify(agedLedger));
-    check('Overdue days computed from bill date + credit_days (Jan 1 + 30d = Jan 31; Jan 31 to Jun 1 = 121 days)',
-      agedLedger[0].bills[0].overdueDays === 121, String(agedLedger[0].bills[0]?.overdueDays));
+    await purchaseService.createPurchase(company.id, actor, {
+      purchaseNumber: 9301, date: '2026-01-10', supplierId: outstandingSupplierId, financialYear: '2025-26', creditDays: 15, brokerName: 'Suresh Broker',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 50, rate: 100, gstPercentage: 5 }]
+    });
+
+    // Partial payment with a discount, dated BEFORE paymentUpto -- must net off the balance.
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'receipt', voucherDate: '2026-02-01', voucherNo: 'RCPT-OA1', bankAccountName: 'Test Bank', isNew: true,
+      lines: [{ accountId: outstandingCustomerId, amount: 500, allocations: [{ billId: saleA.id, amount: 300, discount: 50 }] }]
+    });
+    // A second payment dated AFTER paymentUpto -- must be excluded from the balance.
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'receipt', voucherDate: '2026-07-01', voucherNo: 'RCPT-OA2', bankAccountName: 'Test Bank', isNew: true,
+      lines: [{ accountId: outstandingCustomerId, amount: 200, allocations: [{ billId: saleA.id, amount: 200 }] }]
+    });
+
+    const agedLedger = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId, outstandingSupplierId], '2026-06-01', '2026-03-01', 'broker', false);
+    const saleBill = agedLedger.find(g => g.groupName === 'Ramesh Broker')?.bills[0];
+    const purchaseBill = agedLedger.find(g => g.groupName === 'Suresh Broker')?.bills[0];
+
+    check('Sale bill uses its OWN credit_days (45), not the account\'s (30): due Feb 15, 106 days overdue as of Jun 1',
+      saleBill?.overdueDays === 106, JSON.stringify(saleBill));
+    check('Sale bill with no broker_name falls back to the account\'s broker', agedLedger.some(g => g.groupName === 'Ramesh Broker'), JSON.stringify(agedLedger));
+    check('Only the pre-paymentUpto receipt (300+50 discount) is netted off; the post-paymentUpto one (200) is not: 10500-350=10150',
+      saleBill?.balanceDue === 10150, String(saleBill?.balanceDue));
+    check('Purchase bill uses its OWN credit_days (15) and broker_name (Suresh Broker), not the supplier account\'s (0/none): due Jan 25, 127 days overdue',
+      purchaseBill?.overdueDays === 127 && purchaseBill?.billType === 'purchase', JSON.stringify(purchaseBill));
 
     const dueOnlyExcluded = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-01-05', '2026-01-05', 'account', true);
     check('Due-only filter excludes a bill not yet past its credit days', dueOnlyExcluded.length === 0, JSON.stringify(dueOnlyExcluded));

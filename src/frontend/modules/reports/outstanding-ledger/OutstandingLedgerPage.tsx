@@ -20,7 +20,7 @@ export const OutstandingLedgerPage: React.FC = () => {
   const [groupBy, setGroupBy] = useState<'account' | 'broker'>('account');
   const [dueOnly, setDueOnly] = useState(false);
   const [overdueDays, setOverdueDays] = useState('');
-  const [outstandingGroups, setOutstandingGroups] = useState<{ groupName: string; bills: any[]; totalOutstanding: number }[]>([]);
+  const [outstandingGroups, setOutstandingGroups] = useState<{ groupName: string; bills: any[]; totalReceivable: number; totalPayable: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -93,8 +93,9 @@ export const OutstandingLedgerPage: React.FC = () => {
         </div>
       </Card>
 
-      {outstandingGroups.map(group => (
-        <Card key={group.groupName} title={group.groupName} subtitle={`Total Outstanding: ${formatCurrency(group.totalOutstanding)}`}>
+      {outstandingGroups.map((group, i) => (
+        <Card key={`${group.groupName}-${i}`} title={group.groupName}
+          subtitle={`Receivable: ${formatCurrency(group.totalReceivable)}  |  Payable: ${formatCurrency(group.totalPayable)}`}>
           <Table headers={['Bill Type', 'Bill No.', 'Date', 'Due Date', 'Overdue Days', 'Amount', 'Balance Due']}>
             {group.bills.map((bill: any) => (
               <tr key={bill.billId} className="border-b border-slate-100 last:border-0">

@@ -46,7 +46,7 @@ export const ReportsService = {
   async getOutstandingLedger(token: string, filters: {
     accountIds: string[]; asOfDate: string; paymentUpto: string;
     groupBy: 'account' | 'broker'; dueOnly: boolean; overdueDays?: number;
-  }): Promise<{ groupName: string; bills: any[]; totalOutstanding: number }[]> {
+  }): Promise<{ groupName: string; bills: any[]; totalReceivable: number; totalPayable: number }[]> {
     const query = new URLSearchParams({
       accountIds: filters.accountIds.join(','),
       asOfDate: filters.asOfDate,
