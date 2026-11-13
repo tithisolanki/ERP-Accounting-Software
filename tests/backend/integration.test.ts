@@ -511,6 +511,57 @@ async function runTests() {
       bill360?.interest === 255, String(bill360?.interest));
 
     check('Grouped under the bill\'s own broker (Mahesh Broker), not an account-level one', withEarly.some(g => g.groupName === 'Mahesh Broker'));
+    check('Bills with no broker anywhere land in \'(No Broker)\', not dropped', withEarly.some(g => g.groupName === '(No Broker)' && g.bills.length > 0), JSON.stringify(withEarly.map(g => g.groupName)));
+
+    const byAccount = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, true, 'account');
+    check('Account-wise grouping buckets all this account\'s bills under its name', byAccount.length === 1 && byAccount[0].groupName === 'Interest Test Account' && byAccount[0].bills.length >= 3, JSON.stringify(byAccount));
+
+    // A bill fully settled by a payment BEFORE its own due date never genuinely went overdue --
+    // must be excluded entirely, regardless of includeEarlyPayments (fix for a reviewer finding:
+    // the toggle used to still charge full-principal interest on such a bill when set to false).
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9404, date: '2026-01-01', customerId: interestCustomerId, financialYear: '2025-26', creditDays: 30,
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+    const saleD = await db.get('SELECT id, total_amount FROM sales WHERE invoice_number = 9404 AND company_id = ?', [company.id]);
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'receipt', voucherDate: '2026-01-10', voucherNo: 'RCPT-INT3', bankAccountName: 'Test Bank', isNew: true,
+      lines: [{ accountId: interestCustomerId, amount: saleD.total_amount, allocations: [{ billId: saleD.id, amount: saleD.total_amount }] }]
+    });
+    const afterFullEarlyPayment = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, false, 'account');
+    check('Bill fully paid before its due date never appears, even with includeEarlyPayments=false',
+      !afterFullEarlyPayment.some(g => g.bills.some((b: any) => b.billNumber === 9404)), JSON.stringify(afterFullEarlyPayment));
+
+    // A payment dated BEFORE the queried Payment Period Start must be ignored -- this is AC_PLUS's
+    // own field (a real operator-controlled window), confirmed intentional, not a bug: the bill
+    // still shows its full amount owed when the window doesn't reach back far enough to see the payment.
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9405, date: '2026-01-01', customerId: interestCustomerId, financialYear: '2025-26', creditDays: 10,
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+    const saleE = await db.get('SELECT id, total_amount FROM sales WHERE invoice_number = 9405 AND company_id = ?', [company.id]);
+    await accVoucherService.saveVoucher(company.id, actor, {
+      type: 'receipt', voucherDate: '2026-01-05', voucherNo: 'RCPT-INT4', bankAccountName: 'Test Bank', isNew: true,
+      lines: [{ accountId: interestCustomerId, amount: saleE.total_amount, allocations: [{ billId: saleE.id, amount: saleE.total_amount }] }]
+    });
+    const windowExcludesOldPayment = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-02-01', '2026-04-01', 18, 365, true, 'account');
+    const billE = windowExcludesOldPayment[0]?.bills.find((b: any) => b.billNumber === 9405);
+    check('A payment dated before periodStart is correctly ignored (full amount still shown as owed)',
+      billE?.principal === saleE.total_amount, JSON.stringify(billE));
+
+    // A NULL credit_days (possible via sync/legacy import, bypassing the service's Number(||0)
+    // coercion) must give a sane due date equal to the bill's own date, not a crash or ~56 years
+    // of bogus interest from an invalid date() computation.
+    const nullCreditDaysBillId = crypto.randomUUID();
+    await db.run(
+      `INSERT INTO sales (id, company_id, invoice_number, date, customer_id, financial_year, taxable_value, gst_amount, total_amount, credit_days, updated_at)
+       VALUES (?, ?, 9406, '2026-01-01', ?, '2025-26', 1000, 50, 1050, NULL, ?)`,
+      [nullCreditDaysBillId, company.id, interestCustomerId, now20]
+    );
+    const splitWithNull = await accVoucherRepository.getOverdueBillsWithPaymentSplit(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01');
+    const billNullCreditDays = splitWithNull.find((b: any) => b.billNumber === 9406);
+    check('NULL credit_days gives a due date equal to the bill\'s own date, not a crash or null',
+      billNullCreditDays?.dueDate === '2026-01-01', JSON.stringify(billNullCreditDays));
 
     await closeDb();
     console.log('\nDatabase closed.');

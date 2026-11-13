@@ -195,9 +195,9 @@ export class AccVoucherRepository {
       `SELECT s.id AS billId, s.invoice_number AS billNumber, s.date,
               s.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName,
               COALESCE(NULLIF(s.broker_name, ''), a.broker) AS broker, s.credit_days,
-              date(s.date, '+' || s.credit_days || ' days') AS dueDate,
-              COALESCE(SUM(CASE WHEN rcpt.date BETWEEN ? AND ? AND rcpt.date < date(s.date, '+' || s.credit_days || ' days') THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0) AS paidBeforeDue,
-              COALESCE(SUM(CASE WHEN rcpt.date BETWEEN ? AND ? AND rcpt.date >= date(s.date, '+' || s.credit_days || ' days') THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0) AS paidOnOrAfterDue
+              date(s.date, COALESCE(s.credit_days, 0) || ' days') AS dueDate,
+              COALESCE(SUM(CASE WHEN rcpt.date BETWEEN ? AND ? AND rcpt.date < date(s.date, COALESCE(s.credit_days, 0) || ' days') THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0) AS paidBeforeDue,
+              COALESCE(SUM(CASE WHEN rcpt.date BETWEEN ? AND ? AND rcpt.date >= date(s.date, COALESCE(s.credit_days, 0) || ' days') THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0) AS paidOnOrAfterDue
        FROM sales s
        JOIN accounts a ON a.id = s.customer_id
        LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id

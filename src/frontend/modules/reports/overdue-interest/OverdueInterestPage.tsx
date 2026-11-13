@@ -12,12 +12,28 @@ export const OverdueInterestPage: React.FC = () => {
   const { token, loginDate, addNotification } = useStore();
   const today = loginDate || new Date().toISOString().split('T')[0];
 
+  // Get start and end of Financial Year based on date
+  const getFYDates = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const year = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+    return {
+      start: `${year}-04-01`,
+      end: `${year + 1}-03-31`
+    };
+  };
+  const fy = getFYDates(today);
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [reportDate, setReportDate] = useState(today);
-  const [periodStart, setPeriodStart] = useState(today);
-  const [periodEnd, setPeriodEnd] = useState(today);
+  // Payment Period Start/End defaults to the full financial year (matching PartyLedgerPage/
+  // TrialBalancePage's own date-range convention), not "today" -- defaulting a RANGE to a
+  // single day would silently exclude every payment made before today from reducing a bill's
+  // principal, since this is a real operator-controlled window (AC_PLUS's own field), not an
+  // open-ended cutoff like R6's paymentUpto.
+  const [periodStart, setPeriodStart] = useState(fy.start);
+  const [periodEnd, setPeriodEnd] = useState(fy.end);
   const [interestRate, setInterestRate] = useState('');
   const [maxDaysOfYear, setMaxDaysOfYear] = useState<360 | 365>(365);
   const [includeEarlyPayments, setIncludeEarlyPayments] = useState(true);

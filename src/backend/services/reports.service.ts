@@ -181,7 +181,10 @@ export class ReportsService {
         const interest = Math.round(Math.max(principal, 0) * (interestRatePercent / 100) * overdueDays / maxDaysOfYear * 100) / 100;
         return { ...b, overdueDays, principal, interest };
       })
-      .filter(b => b.overdueDays > 0);
+      // A bill already fully settled by payments made BEFORE its own due date never genuinely
+      // went into arrears -- exclude it regardless of includeEarlyPayments, which only decides
+      // the interest-bearing principal for bills that really were still owed past due.
+      .filter(b => b.overdueDays > 0 && (b.totalAmount - b.paidBeforeDue) > 0.005);
 
     const groups = new Map<string, { groupName: string; bills: any[] }>();
     for (const bill of withInterest) {
