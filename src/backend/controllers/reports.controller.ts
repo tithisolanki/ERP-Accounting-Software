@@ -90,7 +90,6 @@ export class ReportsController {
     const interestRate = Number(req.query.interestRate);
     const maxDaysOfYear = Number(req.query.maxDaysOfYear);
     const includeEarlyPayments = req.query.includeEarlyPayments === 'true';
-    const groupBy = (req.query.groupBy as string) === 'broker' ? 'broker' : 'account';
 
     const dateFormat = /^\d{4}-\d{2}-\d{2}$/;
     if (!accountIds.length || !dateFormat.test(reportDate) || !dateFormat.test(periodStart) || !dateFormat.test(periodEnd)) {
@@ -99,12 +98,12 @@ export class ReportsController {
     if (Number.isNaN(interestRate) || interestRate <= 0) {
       return res.status(400).json({ error: 'interestRate must be a positive number.' });
     }
-    if (maxDaysOfYear !== 360 && maxDaysOfYear !== 365) {
-      return res.status(400).json({ error: 'maxDaysOfYear must be 360 or 365.' });
+    if (Number.isNaN(maxDaysOfYear) || maxDaysOfYear <= 0) {
+      return res.status(400).json({ error: 'maxDaysOfYear must be a positive number.' });
     }
 
     try {
-      const result = await reportsService.getOverdueInterestReport(companyId, accountIds, reportDate, periodStart, periodEnd, interestRate, maxDaysOfYear as 360 | 365, includeEarlyPayments, groupBy);
+      const result = await reportsService.getOverdueInterestReport(companyId, accountIds, reportDate, periodStart, periodEnd, interestRate, maxDaysOfYear, includeEarlyPayments);
       return res.json(result);
     } catch (error: any) {
       return res.status(500).json({ error: error.message });

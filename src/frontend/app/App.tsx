@@ -17,6 +17,7 @@ import {
   accountVoucherItems,
   registerSidebarItems,
   reportsSidebarItems,
+  debtorReportsSidebarItems,
   misreportsSidebarItems,
   quickAccessItems,
   formatLoginDate,
@@ -50,6 +51,29 @@ import {
   XCircle
 } from 'lucide-react';
 import "./../index.css";
+
+// Collapsible sidebar group: shows only `title` until clicked, then reveals `children`
+// with a smooth height animation (see .sidebar-group-content in index.css).
+const SidebarGroup: React.FC<{ title: string; defaultOpen?: boolean; children: React.ReactNode }> = ({ title, defaultOpen = false, children }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 transition-colors cursor-pointer select-none"
+      >
+        <span>{title}</span>
+        <ChevronDown className={`w-3 h-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <div className={`sidebar-group-content ${open ? 'open' : ''}`}>
+        <div className="flex flex-col gap-0.5 overflow-hidden">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const App: React.FC = () => {
   const store = useStore();
@@ -419,10 +443,7 @@ export const App: React.FC = () => {
                   <Layers className="w-4 h-4 shrink-0" />
                   <span>Quick Access Home</span>
                 </div>
-                <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Quick Access
-                </h3>
-                <div className="flex flex-col gap-1">
+                <SidebarGroup title="Quick Access" defaultOpen>
                   {quickAccessItems.map((item) => (
                     <button
                       key={item.sub}
@@ -434,7 +455,7 @@ export const App: React.FC = () => {
                       <span>{item.label}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
               </div>
             )}
 
@@ -444,10 +465,7 @@ export const App: React.FC = () => {
                   <FolderClosed className="w-4 h-4 shrink-0" />
                   <span>Masters Setup</span>
                 </div>
-                <h3 className="px-3 mb-2 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Account
-                </h3>
-                <div className="flex flex-col gap-0.5 mb-2">
+                <SidebarGroup title="Account" defaultOpen={accountsSidebarItems.some(i => i.id === mastersSubTab)}>
                   {accountsSidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -459,12 +477,9 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
 
-                <h3 className="px-3 mb-2 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Inventory
-                </h3>
-                <div className="flex flex-col gap-0.5 mb-2">
+                <SidebarGroup title="Inventory" defaultOpen={inventorySidebarItems.some(i => i.id === mastersSubTab)}>
                   {inventorySidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -476,12 +491,9 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
 
-                <h3 className="px-3 mb-2 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Brokers & Transport
-                </h3>
-                <div className="flex flex-col gap-0.5 mb-2">
+                <SidebarGroup title="Brokers & Transport" defaultOpen={brokersSidebarItems.some(i => i.id === mastersSubTab)}>
                   {brokersSidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -493,12 +505,9 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
 
-                <h3 className="px-3 mb-2 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Company
-                </h3>
-                <div className="flex flex-col gap-0.5 mb-2">
+                <SidebarGroup title="Company" defaultOpen={companySidebarItems.some(i => i.id === mastersSubTab)}>
                   {companySidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -510,7 +519,7 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
               </div>
             )}
 
@@ -521,10 +530,7 @@ export const App: React.FC = () => {
                   <span>Data Entry</span>
                 </div>
                 
-                <h3 className="px-3 mb-2 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Transaction Invoices
-                </h3>
-                <div className="flex flex-col gap-0.5 mb-4">
+                <SidebarGroup title="Transaction Invoices" defaultOpen={activeTab === 'vouchers'}>
                   {voucherSidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -536,12 +542,9 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
 
-                <h3 className="px-3 mb-2 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Account Vouchers
-                </h3>
-                <div className="flex flex-col gap-0.5 mb-4">
+                <SidebarGroup title="Account Vouchers" defaultOpen={accountVoucherItems.some(i => i.id === activeTab)}>
                   {accountVoucherItems.map(item => (
                     <button
                       key={item.id}
@@ -553,12 +556,9 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
 
-                <h3 className="px-3 mb-2 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Opening Balance
-                </h3>
-                <div className="flex flex-col gap-0.5">
+                <SidebarGroup title="Opening Balance" defaultOpen={openingBalanceSidebarItems.some(i => i.id === activeTab)}>
                   {openingBalanceSidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -570,7 +570,7 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
               </div>
             )}
 
@@ -608,8 +608,25 @@ export const App: React.FC = () => {
                 <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
                   Ledgers
                 </h3>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 mb-4">
                   {reportsSidebarItems.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleTabSwitch('reports', item.id)}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-lg text-xs font-semibold transition-all text-left cursor-pointer ${reportType === item.id ? 'bg-indigo-50/50 text-indigo-650 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full ${reportType === item.id ? 'bg-indigo-600' : 'bg-slate-300'}`} />
+                      <span>{item.name}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
+                  Debtors Reports
+                </h3>
+                <div className="flex flex-col gap-1">
+                  {debtorReportsSidebarItems.map(item => (
                     <button
                       key={item.id}
                       type="button"

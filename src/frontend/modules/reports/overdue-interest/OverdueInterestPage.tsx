@@ -35,9 +35,10 @@ export const OverdueInterestPage: React.FC = () => {
   const [periodStart, setPeriodStart] = useState(fy.start);
   const [periodEnd, setPeriodEnd] = useState(fy.end);
   const [interestRate, setInterestRate] = useState('');
-  const [maxDaysOfYear, setMaxDaysOfYear] = useState<360 | 365>(365);
+  // AC_PLUS's "Maximum Days of the year" is a plain typed number (confirmed: the control is a
+  // native VB6 TextBox, not a dropdown), not limited to 360/365.
+  const [maxDaysOfYear, setMaxDaysOfYear] = useState('365');
   const [includeEarlyPayments, setIncludeEarlyPayments] = useState(true);
-  const [groupBy, setGroupBy] = useState<'account' | 'broker'>('account');
   const [interestGroups, setInterestGroups] = useState<{ groupName: string; bills: any[]; totalInterest: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -50,12 +51,12 @@ export const OverdueInterestPage: React.FC = () => {
   const formatCurrency = (val: number) => new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
   const handleGenerate = async () => {
-    if (!token || selectedAccountIds.length === 0 || !interestRate) return;
+    if (!token || selectedAccountIds.length === 0 || !interestRate || !maxDaysOfYear) return;
     setLoading(true);
     try {
       const result = await ReportsService.getOverdueInterest(token, {
         accountIds: selectedAccountIds, reportDate, periodStart, periodEnd,
-        interestRate: Number(interestRate), maxDaysOfYear, includeEarlyPayments, groupBy
+        interestRate: Number(interestRate), maxDaysOfYear: Number(maxDaysOfYear), includeEarlyPayments
       });
       setInterestGroups(result);
     } catch (err: any) {
@@ -87,7 +88,7 @@ export const OverdueInterestPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 items-end">
+          <div className="grid grid-cols-2 gap-4 items-end">
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] uppercase font-bold text-slate-500">Interest Rate (%)</label>
               <input type="number" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} placeholder="e.g. 18"
@@ -95,19 +96,8 @@ export const OverdueInterestPage: React.FC = () => {
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] uppercase font-bold text-slate-500">Maximum Days of the Year</label>
-              <select value={maxDaysOfYear} onChange={(e) => setMaxDaysOfYear(Number(e.target.value) as 360 | 365)}
-                className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs cursor-pointer">
-                <option value={365}>365</option>
-                <option value={360}>360</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] uppercase font-bold text-slate-500">Outstanding Type</label>
-              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as 'account' | 'broker')}
-                className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs cursor-pointer">
-                <option value="account">Account-wise</option>
-                <option value="broker">Broker-wise</option>
-              </select>
+              <input type="number" value={maxDaysOfYear} onChange={(e) => setMaxDaysOfYear(e.target.value)} placeholder="e.g. 365"
+                className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs" />
             </div>
           </div>
 
@@ -118,7 +108,7 @@ export const OverdueInterestPage: React.FC = () => {
 
           <AccountMultiSelect accounts={accounts} groups={groups} selectedIds={selectedAccountIds} onChange={setSelectedAccountIds} />
 
-          <Button variant="primary" disabled={selectedAccountIds.length === 0 || !interestRate || loading} onClick={handleGenerate}
+          <Button variant="primary" disabled={selectedAccountIds.length === 0 || !interestRate || !maxDaysOfYear || loading} onClick={handleGenerate}
             className="cursor-pointer font-bold text-xs py-1.5 px-4 h-9 self-end">
             <Percent className="w-4 h-4 mr-1.5" /> {loading ? 'Loading...' : 'Generate'}
           </Button>

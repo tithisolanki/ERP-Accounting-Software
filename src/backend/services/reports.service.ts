@@ -162,11 +162,13 @@ export class ReportsService {
    * Overdue Interest (R19, debtors only): simple interest on each overdue sale bill's
    * principal. "includeEarlyPayments" toggles whether a payment made before the bill's own
    * due date reduces that principal, or is ignored (AC_PLUS's "Include Payment before due
-   * date"). Grouped by account or broker, same pattern as getOutstandingLedger.
+   * date"). Grouped by account only -- confirmed directly against the AC_PLUS form's own
+   * fields that this screen has no Account-wise/Broker-wise toggle (that belongs to the
+   * separate Outstanding Ledger screen).
    */
   async getOverdueInterestReport(
     companyId: string, accountIds: string[], reportDate: string, periodStart: string, periodEnd: string,
-    interestRatePercent: number, maxDaysOfYear: 360 | 365, includeEarlyPayments: boolean, groupBy: 'account' | 'broker'
+    interestRatePercent: number, maxDaysOfYear: number, includeEarlyPayments: boolean
   ) {
     const bills = await accVoucherRepository.getOverdueBillsWithPaymentSplit(companyId, accountIds, reportDate, periodStart, periodEnd);
     const asOf = new Date(reportDate).getTime();
@@ -188,10 +190,8 @@ export class ReportsService {
 
     const groups = new Map<string, { groupName: string; bills: any[] }>();
     for (const bill of withInterest) {
-      const key = groupBy === 'broker' ? (bill.broker || '(No Broker)') : bill.accountId;
-      const groupName = groupBy === 'broker' ? (bill.broker || '(No Broker)') : bill.accountName;
-      if (!groups.has(key)) groups.set(key, { groupName, bills: [] });
-      groups.get(key)!.bills.push(bill);
+      if (!groups.has(bill.accountId)) groups.set(bill.accountId, { groupName: bill.accountName, bills: [] });
+      groups.get(bill.accountId)!.bills.push(bill);
     }
 
     return Array.from(groups.values()).map(({ groupName, bills: groupBills }) => ({

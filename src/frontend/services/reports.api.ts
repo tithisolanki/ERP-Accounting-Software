@@ -60,7 +60,7 @@ export const ReportsService = {
 
   async getOverdueInterest(token: string, filters: {
     accountIds: string[]; reportDate: string; periodStart: string; periodEnd: string;
-    interestRate: number; maxDaysOfYear: 360 | 365; includeEarlyPayments: boolean; groupBy: 'account' | 'broker';
+    interestRate: number; maxDaysOfYear: number; includeEarlyPayments: boolean;
   }): Promise<{ groupName: string; bills: any[]; totalInterest: number }[]> {
     const query = new URLSearchParams({
       accountIds: filters.accountIds.join(','),
@@ -69,8 +69,7 @@ export const ReportsService = {
       periodEnd: filters.periodEnd,
       interestRate: String(filters.interestRate),
       maxDaysOfYear: String(filters.maxDaysOfYear),
-      includeEarlyPayments: String(filters.includeEarlyPayments),
-      groupBy: filters.groupBy
+      includeEarlyPayments: String(filters.includeEarlyPayments)
     }).toString();
     return apiFetch(`/api/reports/overdue-interest?${query}`, token);
   }

@@ -494,27 +494,23 @@ async function runTests() {
     check('credit_days=0 gives a due date equal to the bill\'s own date, not a crash or null', billB?.dueDate === '2026-02-01', JSON.stringify(billB));
     check('A payment dated EXACTLY on the due date counts as paidOnOrAfterDue, not paidBeforeDue', billC?.paidOnOrAfterDue === 1000 && billC?.paidBeforeDue === 0, JSON.stringify(billC));
 
-    const withEarly = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, true, 'broker');
-    const billWithEarly = withEarly.find(g => g.groupName === 'Mahesh Broker')?.bills[0];
+    const withEarly = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, true);
+    check('Grouped by account only -- no Outstanding Type on this AC_PLUS screen (confirmed via its form fields)',
+      withEarly.length === 1 && withEarly[0].groupName === 'Interest Test Account' && withEarly[0].bills.length >= 3, JSON.stringify(withEarly.map((g: any) => g.groupName)));
+    const billWithEarly = withEarly[0]?.bills.find((b: any) => b.billNumber === 9401);
     check('overdueDays = Jan 31 to Apr 1 = 60 days', billWithEarly?.overdueDays === 60, String(billWithEarly?.overdueDays));
     check('includeEarlyPayments=true nets the early payment: principal 10500-2000=8500, interest = 8500*0.18*60/365 = 251.51',
       billWithEarly?.principal === 8500 && billWithEarly?.interest === 251.51, JSON.stringify(billWithEarly));
 
-    const withoutEarly = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, false, 'broker');
-    const billWithoutEarly = withoutEarly.find(g => g.groupName === 'Mahesh Broker')?.bills[0];
+    const withoutEarly = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, false);
+    const billWithoutEarly = withoutEarly[0]?.bills.find((b: any) => b.billNumber === 9401);
     check('includeEarlyPayments=false ignores the early payment: principal stays 10500, interest = 10500*0.18*60/365 = 310.68',
       billWithoutEarly?.principal === 10500 && billWithoutEarly?.interest === 310.68, JSON.stringify(billWithoutEarly));
 
-    const with360 = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 360, true, 'broker');
-    const bill360 = with360.find(g => g.groupName === 'Mahesh Broker')?.bills[0];
-    check('maxDaysOfYear changes the result: 365-day basis gives 251.51, 360-day basis gives exactly 255.00',
+    const with360 = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 360, true);
+    const bill360 = with360[0]?.bills.find((b: any) => b.billNumber === 9401);
+    check('maxDaysOfYear changes the result (now a typed number, not limited to 360/365): 365-day basis gives 251.51, 360 gives exactly 255.00',
       bill360?.interest === 255, String(bill360?.interest));
-
-    check('Grouped under the bill\'s own broker (Mahesh Broker), not an account-level one', withEarly.some(g => g.groupName === 'Mahesh Broker'));
-    check('Bills with no broker anywhere land in \'(No Broker)\', not dropped', withEarly.some(g => g.groupName === '(No Broker)' && g.bills.length > 0), JSON.stringify(withEarly.map(g => g.groupName)));
-
-    const byAccount = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, true, 'account');
-    check('Account-wise grouping buckets all this account\'s bills under its name', byAccount.length === 1 && byAccount[0].groupName === 'Interest Test Account' && byAccount[0].bills.length >= 3, JSON.stringify(byAccount));
 
     // A bill fully settled by a payment BEFORE its own due date never genuinely went overdue --
     // must be excluded entirely, regardless of includeEarlyPayments (fix for a reviewer finding:
@@ -528,7 +524,7 @@ async function runTests() {
       type: 'receipt', voucherDate: '2026-01-10', voucherNo: 'RCPT-INT3', bankAccountName: 'Test Bank', isNew: true,
       lines: [{ accountId: interestCustomerId, amount: saleD.total_amount, allocations: [{ billId: saleD.id, amount: saleD.total_amount }] }]
     });
-    const afterFullEarlyPayment = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, false, 'account');
+    const afterFullEarlyPayment = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-01-01', '2026-04-01', 18, 365, false);
     check('Bill fully paid before its due date never appears, even with includeEarlyPayments=false',
       !afterFullEarlyPayment.some(g => g.bills.some((b: any) => b.billNumber === 9404)), JSON.stringify(afterFullEarlyPayment));
 
@@ -544,7 +540,7 @@ async function runTests() {
       type: 'receipt', voucherDate: '2026-01-05', voucherNo: 'RCPT-INT4', bankAccountName: 'Test Bank', isNew: true,
       lines: [{ accountId: interestCustomerId, amount: saleE.total_amount, allocations: [{ billId: saleE.id, amount: saleE.total_amount }] }]
     });
-    const windowExcludesOldPayment = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-02-01', '2026-04-01', 18, 365, true, 'account');
+    const windowExcludesOldPayment = await reportsService.getOverdueInterestReport(company.id, [interestCustomerId], '2026-04-01', '2026-02-01', '2026-04-01', 18, 365, true);
     const billE = windowExcludesOldPayment[0]?.bills.find((b: any) => b.billNumber === 9405);
     check('A payment dated before periodStart is correctly ignored (full amount still shown as owed)',
       billE?.principal === saleE.total_amount, JSON.stringify(billE));
