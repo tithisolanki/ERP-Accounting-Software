@@ -69,7 +69,10 @@ export const accountVoucherItems = [
   { id: 'bank_receipt', name: 'Bank Receipt' },
   { id: 'cash_payment', name: 'Cash Payment' },
   { id: 'cash_receipt', name: 'Cash Receipt' },
-  { id: 'journal_voucher', name: 'Journal Voucher' }
+  { id: 'journal_voucher', name: 'Journal Voucher' },
+  // AC_PLUS files this under Data Entry > Account Voucher > Books Closing > Books
+  // Closing Voucher (confirmed via its menu resource strings), not under Reports.
+  { id: 'close_financial_year', name: 'Close Financial Year' }
 ];
 
 export const openingBalanceSidebarItems = [
@@ -83,9 +86,16 @@ export const registerSidebarItems = [
   { id: 'journal', name: 'Journal Register' }
 ];
 
+// AC_PLUS files Trial Balance under its separate M.I.S.Reports menu
+// (confirmed via its menu resource strings), not plain Reports.
+export const misreportsSidebarItems = [
+  { id: 'trial_balance', name: 'Trial Balance' }
+];
+
+// AC_PLUS files General Account Ledger under plain Reports (confirmed via its
+// menu resource strings).
 export const reportsSidebarItems = [
-  { id: 'trial_balance', name: 'Trial Balance' },
-  { id: 'close_financial_year', name: 'Close Financial Year' }
+  { id: 'party_ledger', name: 'Party Ledger' }
 ];
 
 export const quickAccessItems = [

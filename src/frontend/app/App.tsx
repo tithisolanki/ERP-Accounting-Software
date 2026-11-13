@@ -17,17 +17,19 @@ import {
   accountVoucherItems,
   registerSidebarItems,
   reportsSidebarItems,
+  misreportsSidebarItems,
   quickAccessItems,
   formatLoginDate,
   accountsSidebarItems,
   inventorySidebarItems,
   brokersSidebarItems,
   companySidebarItems,
-  openingBalanceSidebarItems
+  openingBalanceSidebarItems,
 } from './config';
 import { AccountOpeningBalancePage } from '../modules/opening/AccountOpeningBalancePage';
 import { StockOpeningBalancePage } from '../modules/opening/StockOpeningBalancePage';
 import { TrialBalancePage } from '../modules/reports/trial-balance';
+import { PartyLedgerPage } from '../modules/reports/party-ledger';
 import { CloseFinancialYearPage } from '../modules/reports/close-financial-year';
 import { 
   FolderClosed, 
@@ -53,7 +55,7 @@ export const App: React.FC = () => {
   const [mastersSubTab, setMastersSubTab] = useState<string>('accounts');
   const [voucherType, setVoucherType] = useState<'purchase' | 'sale' | 'challan'>('sale');
   const [registerType, setRegisterType] = useState<'sales' | 'purchases' | 'journal'>('sales');
-  const [reportType, setReportType] = useState<'trial_balance'>('trial_balance');
+  const [reportType, setReportType] = useState<'trial_balance' | 'party_ledger'>('trial_balance');
 
   const handleTabSwitch = (targetTab: string | null, targetSubTab?: string | null) => {
     if ((window as any).isMastersDirty) {
@@ -72,7 +74,7 @@ export const App: React.FC = () => {
     if (targetTab === 'registers' && targetSubTab) {
       setRegisterType(targetSubTab as any);
     }
-    if (targetTab === 'reports' && targetSubTab) {
+    if ((targetTab === 'reports' || targetTab === 'misreports') && targetSubTab) {
       setReportType(targetSubTab as any);
     }
   };
@@ -209,6 +211,8 @@ export const App: React.FC = () => {
         return <CashVouchers type="receipt" />;
       case 'journal_voucher':
         return <JournalVouchers />;
+      case 'close_financial_year':
+        return <CloseFinancialYearPage />;
       case 'backup':
         return <BackupRestore />;
       case 'registers':
@@ -216,11 +220,13 @@ export const App: React.FC = () => {
       case 'settings':
         return <Settings />;
       case 'reports':
+        if (reportType === 'party_ledger') {
+          return <PartyLedgerPage />;
+        }
+        return null;
+      case 'misreports':
         if (reportType === 'trial_balance') {
           return <TrialBalancePage />;
-        }
-        if (reportType === 'close_financial_year') {
-          return <CloseFinancialYearPage />;
         }
         return null;
       case 'account_opening':
@@ -285,7 +291,7 @@ export const App: React.FC = () => {
               key={item.id}
               onClick={() => handleTabSwitch(item.id)}
               className={`px-3 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt'))
+                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'close_financial_year'))
                   ? 'bg-slate-100/80 text-indigo-650 font-extrabold border border-slate-200/50 shadow-inner' 
                   : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50'
               }`}
@@ -496,7 +502,7 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'journal_voucher' || activeTab === 'account_opening' || activeTab === 'stock_opening') && (
+            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'journal_voucher' || activeTab === 'close_financial_year' || activeTab === 'account_opening' || activeTab === 'stock_opening') && (
               <div>
                 <div className="flex items-center gap-2 px-3 py-3 rounded-xl bg-indigo-50 text-indigo-700 font-bold mb-3.5 text-xs shadow-sm">
                   <FileText className="w-4 h-4 shrink-0" />
@@ -585,10 +591,10 @@ export const App: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 px-3 py-3 rounded-xl bg-indigo-50 text-indigo-700 font-bold mb-3.5 text-xs shadow-sm">
                   <BarChart3 className="w-4 h-4 shrink-0" />
-                  <span>Financial Reports</span>
+                  <span>Reports</span>
                 </div>
                 <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Accounting
+                  Ledgers
                 </h3>
                 <div className="flex flex-col gap-1">
                   {reportsSidebarItems.map(item => (
@@ -596,6 +602,31 @@ export const App: React.FC = () => {
                       key={item.id}
                       type="button"
                       onClick={() => handleTabSwitch('reports', item.id)}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-lg text-xs font-semibold transition-all text-left cursor-pointer ${reportType === item.id ? 'bg-indigo-50/50 text-indigo-650 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full ${reportType === item.id ? 'bg-indigo-600' : 'bg-slate-300'}`} />
+                      <span>{item.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'misreports' && (
+              <div>
+                <div className="flex items-center gap-2 px-3 py-3 rounded-xl bg-indigo-50 text-indigo-700 font-bold mb-3.5 text-xs shadow-sm">
+                  <BarChart3 className="w-4 h-4 shrink-0" />
+                  <span>M.I.S. Reports</span>
+                </div>
+                <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
+                  Accounting
+                </h3>
+                <div className="flex flex-col gap-1">
+                  {misreportsSidebarItems.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleTabSwitch('misreports', item.id)}
                       className={`flex items-center gap-3 px-3 py-3 rounded-lg text-xs font-semibold transition-all text-left cursor-pointer ${reportType === item.id ? 'bg-indigo-50/50 text-indigo-650 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
                     >
                       <div className={`w-1.5 h-1.5 rounded-full ${reportType === item.id ? 'bg-indigo-600' : 'bg-slate-300'}`} />
