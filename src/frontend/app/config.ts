@@ -70,8 +70,7 @@ export const voucherSidebarItems = [
 export const allocationEntrySidebarItems = [
   { id: 'sales_allocation', name: 'Sales Allocation Entry' },
   { id: 'purchase_allocation', name: 'Purchase Allocation Entry' },
-  { id: 'sales_allocation_print', name: 'Print Sales Allocation' },
-  { id: 'purchase_allocation_print', name: 'Print Purchase Allocation' }
+  { id: 'allocation_print', name: 'Print Allocation' }
 ];
 
 export const accountVoucherItems = [

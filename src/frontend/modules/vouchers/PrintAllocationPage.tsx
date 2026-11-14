@@ -2,30 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
-import { AccountMultiSelect } from '../../components/AccountMultiSelect';
-import { AccountService, GroupService } from '../../services/api';
+import { AccountService } from '../../services/api';
 import { PrintAllocationModal } from './PrintAllocationModal';
 import { Printer } from 'lucide-react';
 
 /** Multi-account, date-ranged setup screen for Print Allocation, matching AC_PLUS's own
  * ADEBALOCPRNT/ACREALOCPRNT screens: an account multi-select plus a Start Date/End Date range,
- * handing off to a PDF preview once Print is pressed. */
-export const PrintAllocationPage: React.FC<{ side: 'debtor' | 'creditor' }> = ({ side }) => {
-  const { token, loginDate, addNotification } = useStore();
+ * handing off to a PDF preview once Print is pressed. One screen toggles Sales/Purchase rather
+ * than two separate sidebar entries. */
+export const PrintAllocationPage: React.FC = () => {
+  const { token, loginDate, financialYear, addNotification } = useStore();
+  const [side, setSide] = useState<'debtor' | 'creditor'>('debtor');
   const label = side === 'debtor' ? 'Sales' : 'Purchase';
 
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+  const fyStartYear = (financialYear || '').split('-')[0] || new Date().getFullYear().toString();
+  const defaultStartDate = `${fyStartYear}-04-01`;
+
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
-  const [startDate, setStartDate] = useState(loginDate);
+  const [startDate, setStartDate] = useState(defaultStartDate);
   const [endDate, setEndDate] = useState(loginDate);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!token) return;
     AccountService.getAll(token).then(setAccounts).catch(() => addNotification('error', 'Failed to load accounts.'));
-    GroupService.getGroups(token).then(setGroups).catch(() => addNotification('error', 'Failed to load groups.'));
   }, [token]);
+
+  const toggleAccount = (id: string) => {
+    setSelectedAccountIds((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
+  };
 
   const handlePrint = () => {
     if (selectedAccountIds.length === 0) {
@@ -37,8 +43,19 @@ export const PrintAllocationPage: React.FC<{ side: 'debtor' | 'creditor' }> = ({
 
   return (
     <div className="flex flex-col gap-5 select-none text-xs max-w-4xl">
-      <Card title={`Print ${label} Allocation`} subtitle="Pick one or more accounts and a date range, matching AC_PLUS's own batch print screen">
+      <Card title="Print Allocation" subtitle="Pick one or more accounts and a date range, matching AC_PLUS's own batch print screen">
         <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-4 font-bold text-slate-700">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input type="radio" name="allocPrintSide" checked={side === 'debtor'} onChange={() => { setSide('debtor'); setSelectedAccountIds([]); }} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
+              Sales
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input type="radio" name="allocPrintSide" checked={side === 'creditor'} onChange={() => { setSide('creditor'); setSelectedAccountIds([]); }} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
+              Purchase
+            </label>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] uppercase font-bold text-slate-500">Start Date</label>
@@ -52,7 +69,17 @@ export const PrintAllocationPage: React.FC<{ side: 'debtor' | 'creditor' }> = ({
             </div>
           </div>
 
-          <AccountMultiSelect accounts={accounts} groups={groups} selectedIds={selectedAccountIds} onChange={setSelectedAccountIds} />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] uppercase font-bold text-slate-500">{label} Accounts</label>
+            <div className="border border-slate-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-slate-100">
+              {accounts.map((a) => (
+                <label key={a.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none hover:bg-slate-50 font-semibold text-slate-700">
+                  <input type="checkbox" checked={selectedAccountIds.includes(a.id)} onChange={() => toggleAccount(a.id)} className="w-3.5 h-3.5 rounded accent-indigo-650 cursor-pointer" />
+                  {a.name}
+                </label>
+              ))}
+            </div>
+          </div>
 
           <Button variant="primary" disabled={selectedAccountIds.length === 0} onClick={handlePrint}
             className="cursor-pointer font-bold text-xs py-1.5 px-4 h-9 self-end">

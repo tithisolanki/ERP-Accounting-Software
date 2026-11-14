@@ -249,10 +249,8 @@ export const App: React.FC = () => {
         return <AllocationEntryPage side="debtor" />;
       case 'purchase_allocation':
         return <AllocationEntryPage side="creditor" />;
-      case 'sales_allocation_print':
-        return <PrintAllocationPage side="debtor" />;
-      case 'purchase_allocation_print':
-        return <PrintAllocationPage side="creditor" />;
+      case 'allocation_print':
+        return <PrintAllocationPage />;
       case 'backup':
         return <BackupRestore />;
       case 'registers':
@@ -342,7 +340,7 @@ export const App: React.FC = () => {
               key={item.id}
               onClick={() => handleTabSwitch(item.id)}
               className={`px-3 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'close_financial_year' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation' || activeTab === 'sales_allocation_print' || activeTab === 'purchase_allocation_print'))
+                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'close_financial_year' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation' || activeTab === 'allocation_print'))
                   ? 'bg-slate-100/80 text-indigo-650 font-extrabold border border-slate-200/50 shadow-inner' 
                   : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50'
               }`}
@@ -538,7 +536,7 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'journal_voucher' || activeTab === 'close_financial_year' || activeTab === 'account_opening' || activeTab === 'stock_opening' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation' || activeTab === 'sales_allocation_print' || activeTab === 'purchase_allocation_print') && (
+            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'journal_voucher' || activeTab === 'close_financial_year' || activeTab === 'account_opening' || activeTab === 'stock_opening' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation' || activeTab === 'allocation_print') && (
               <div>
                 <div className="flex items-center gap-2 px-3 py-3 rounded-xl bg-indigo-50 text-indigo-700 font-bold mb-3.5 text-xs shadow-sm">
                   <FileText className="w-4 h-4 shrink-0" />
