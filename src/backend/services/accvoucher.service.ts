@@ -348,7 +348,10 @@ export class AccVoucherService {
     }
 
     const sortedAccounts = [...accounts].sort((a, b) => a.name.localeCompare(b.name));
-    const accountPages = sortedAccounts.map((account) => {
+    // An account with no settling activity in the range gets no section at all -- matching
+    // AC_PLUS's own printed report, which never shows a bare account name with nothing under it.
+    // This matters more now that Select All can pull in every account in the company at once.
+    const accountPages = sortedAccounts.filter((account) => (rowsByAccount.get(account.id) || []).length > 0).map((account) => {
       const accountRows = rowsByAccount.get(account.id) || [];
       const seenVouchers = new Set<string>();
       let voucherTotal = 0;
