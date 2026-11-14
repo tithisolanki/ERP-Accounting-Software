@@ -817,7 +817,7 @@ async function runTests() {
     const srSaleB = await db.get('SELECT id, total_amount, date FROM sales WHERE invoice_number = 9602 AND company_id = ?', [company.id]);
     check('Sale B total = 5,250', srSaleB.total_amount === 5250, `got ${srSaleB.total_amount}`);
 
-    await salesReturnService.createSalesReturn(company.id, actor, {
+    const returnBId = await salesReturnService.createSalesReturn(company.id, actor, {
       returnNumber: 1, date: '2026-04-05', customerId: returnCustomerId, financialYear: '2026-27',
       againstSaleId: srSaleB.id, againstBillDate: srSaleB.date, returnType: 'Grey',
       items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
@@ -826,6 +826,12 @@ async function runTests() {
     const srSaleBBill = billsAfterCrossFyReturn.find((b: any) => b.billId === srSaleB.id);
     check('A return dated in a different financial year than its bill still finds the bill correctly (5250 - 1050 = 4200)',
       srSaleBBill?.balanceDue === 4200, JSON.stringify(srSaleBBill));
+
+    await salesReturnService.deleteSalesReturn(company.id, returnBId, actor);
+    const billsAfterReturnDelete = await accVoucherRepository.getOutstandingBills(company.id, returnCustomerId);
+    const srSaleBBillAfterDelete = billsAfterReturnDelete.find((b: any) => b.billId === srSaleB.id);
+    check('Deleting a return reverts the bill\'s balanceDue to its pre-return amount (back to 5250)',
+      srSaleBBillAfterDelete?.balanceDue === 5250, JSON.stringify(srSaleBBillAfterDelete));
 
     // Sale C: used for the edit-does-not-double-count check (zero GST for clean arithmetic).
     await salesService.createSale(company.id, actor, {
