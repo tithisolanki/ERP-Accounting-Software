@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
-import { LookupService, TransactionsService, ReportsService, AccountService, SalesReturnService } from '../../services/api';
+import { LookupService, TransactionsService, ReportsService, AccountService, SalesReturnService, PurchaseReturnService } from '../../services/api';
 import { TrendingUp, TrendingDown, FileText, RotateCcw } from 'lucide-react';
 
 import { RegisterToolbar } from './RegistersToolbar';
@@ -9,9 +9,9 @@ import { RegisterTable } from './RegistersTable';
 import { RegisterSummary } from './RegistersSummary';
 import { exportToCSV } from './utils/reportExport';
 
-export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'journal' | 'sales_returns' }> = ({ initialRegister = 'sales' }) => {
+export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'journal' | 'sales_returns' | 'purchase_returns' }> = ({ initialRegister = 'sales' }) => {
   const { token, addNotification, loginDate, company } = useStore();
-  const [activeRegister, setActiveRegister] = useState<'sales' | 'purchases' | 'journal' | 'sales_returns'>(initialRegister);
+  const [activeRegister, setActiveRegister] = useState<'sales' | 'purchases' | 'journal' | 'sales_returns' | 'purchase_returns'>(initialRegister);
 
   useEffect(() => {
     if (initialRegister) {
@@ -30,6 +30,7 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
   const [purchasesList, setPurchasesList] = useState<any[]>([]);
   const [journalList, setJournalList] = useState<any[]>([]);
   const [salesReturnsList, setSalesReturnsList] = useState<any[]>([]);
+  const [purchaseReturnsList, setPurchaseReturnsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Get start and end of Financial Year based on date
@@ -57,6 +58,10 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
   // Sales Return specific filters -- mirrors the sales filter shape (customer only; a
   // return has no credit-account/sales-type fields of its own to filter on).
   const [salesReturnCustomer, setSalesReturnCustomer] = useState('');
+
+  // Purchase Return specific filters -- mirrors the purchase filter shape (supplier only; a
+  // return has no debit-account/purchase-type fields of its own to filter on).
+  const [purchaseReturnSupplier, setPurchaseReturnSupplier] = useState('');
 
   // Purchase specific filters
   const [purchaseSupplier, setPurchaseSupplier] = useState('');
@@ -110,6 +115,8 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
         setJournalList((await ReportsService.getJournalRegister(token)) || []);
       } else if (activeRegister === 'sales_returns') {
         setSalesReturnsList((await SalesReturnService.getAll(token)) || []);
+      } else if (activeRegister === 'purchase_returns') {
+        setPurchaseReturnsList((await PurchaseReturnService.getAll(token)) || []);
       }
     } catch (err: any) {
       addNotification('error', 'Failed to fetch transactions: ' + (err.message || 'Unknown error'));
@@ -198,16 +205,32 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
     });
   };
 
+  const getFilteredPurchaseReturns = () => {
+    return purchaseReturnsList.filter(r => {
+      if (startDate && r.date < startDate) return false;
+      if (endDate && r.date > endDate) return false;
+      if (purchaseReturnSupplier && r.supplier_id !== purchaseReturnSupplier) return false;
+      return true;
+    });
+  };
+
   const filteredSales = getFilteredSales();
   const filteredPurchases = getFilteredPurchases();
   const filteredJournals = getFilteredJournalVouchers();
   const filteredSalesReturns = getFilteredSalesReturns();
+  const filteredPurchaseReturns = getFilteredPurchaseReturns();
 
   // CALCULATE SUMMARIES FOR REGISTERS
   const salesReturnSummary = {
     taxable: filteredSalesReturns.reduce((sum, r) => sum + (r.taxable_value || 0), 0),
     gst: filteredSalesReturns.reduce((sum, r) => sum + (r.gst_amount || 0), 0),
     total: filteredSalesReturns.reduce((sum, r) => sum + (r.total_amount || 0), 0)
+  };
+
+  const purchaseReturnSummary = {
+    taxable: filteredPurchaseReturns.reduce((sum, r) => sum + (r.taxable_value || 0), 0),
+    gst: filteredPurchaseReturns.reduce((sum, r) => sum + (r.gst_amount || 0), 0),
+    total: filteredPurchaseReturns.reduce((sum, r) => sum + (r.total_amount || 0), 0)
   };
 
   const salesSummary = {
@@ -241,7 +264,8 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
       filteredPurchases,
       purchaseRegisterType,
       filteredJournals,
-      filteredSalesReturns
+      filteredSalesReturns,
+      filteredPurchaseReturns
     );
   };
 
@@ -313,6 +337,12 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
           >
             <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Sales Return Register
           </button>
+          <button
+            onClick={() => setActiveRegister('purchase_returns')}
+            className={`px-3.5 py-1.5 font-bold rounded-lg transition-all cursor-pointer flex items-center ${activeRegister === 'purchase_returns' ? 'bg-white text-indigo-650 font-bold border border-slate-200/50 shadow-sm' : 'text-slate-600 hover:text-indigo-650 hover:bg-white/50'}`}
+          >
+            <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Purchase Return Register
+          </button>
         </div>
       </div>
 
@@ -338,6 +368,8 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
           setSalesType={setSalesType}
           salesReturnCustomer={salesReturnCustomer}
           setSalesReturnCustomer={setSalesReturnCustomer}
+          purchaseReturnSupplier={purchaseReturnSupplier}
+          setPurchaseReturnSupplier={setPurchaseReturnSupplier}
           purchaseSupplier={purchaseSupplier}
           setPurchaseSupplier={setPurchaseSupplier}
           purchaseDebitAccount={purchaseDebitAccount}
@@ -382,7 +414,7 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
                 </p>
               )}
               <h3 className="text-xs font-bold text-slate-700 capitalize leading-none tracking-wide mt-2">
-                {activeRegister === 'sales_returns' ? 'Sales Return Register' : `${activeRegister} Register (${activeRegister === 'sales' ? salesRegisterType : activeRegister === 'purchases' ? purchaseRegisterType : 'Journal'} view)`}
+                {activeRegister === 'sales_returns' ? 'Sales Return Register' : activeRegister === 'purchase_returns' ? 'Purchase Return Register' : `${activeRegister} Register (${activeRegister === 'sales' ? salesRegisterType : activeRegister === 'purchases' ? purchaseRegisterType : 'Journal'} view)`}
               </h3>
               <p className="text-[11px] font-bold text-slate-500 font-mono tracking-wider mt-1.5">
                 For Period: {formatDateForDisplay(startDate)} To {formatDateForDisplay(endDate)}
@@ -406,11 +438,13 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
                   filteredPurchases={filteredPurchases}
                   filteredJournals={filteredJournals}
                   filteredSalesReturns={filteredSalesReturns}
+                  filteredPurchaseReturns={filteredPurchaseReturns}
                   formatDateForDisplay={formatDateForDisplay}
                   formatCurrency={formatCurrency}
                   salesSummary={salesSummary}
                   purchaseSummary={purchaseSummary}
                   salesReturnSummary={salesReturnSummary}
+                  purchaseReturnSummary={purchaseReturnSummary}
                 />
 
                 <RegisterSummary
@@ -421,10 +455,12 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
                   filteredPurchases={filteredPurchases}
                   filteredJournals={filteredJournals}
                   filteredSalesReturns={filteredSalesReturns}
+                  filteredPurchaseReturns={filteredPurchaseReturns}
                   salesSummary={salesSummary}
                   purchaseSummary={purchaseSummary}
                   journalSummary={journalSummary}
                   salesReturnSummary={salesReturnSummary}
+                  purchaseReturnSummary={purchaseReturnSummary}
                   formatCurrency={formatCurrency}
                 />
               </>

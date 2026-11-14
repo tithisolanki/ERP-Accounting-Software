@@ -1,18 +1,20 @@
 import React from 'react';
 
 interface RegisterTableProps {
-  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns';
+  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns' | 'purchase_returns';
   salesRegisterType: 'summarised' | 'detailed';
   purchaseRegisterType: 'summarised' | 'detailed';
   filteredSales: any[];
   filteredPurchases: any[];
   filteredJournals: any[];
   filteredSalesReturns: any[];
+  filteredPurchaseReturns: any[];
   formatDateForDisplay: (date: string) => string;
   formatCurrency: (val: number) => string;
   salesSummary: any;
   purchaseSummary: any;
   salesReturnSummary: any;
+  purchaseReturnSummary: any;
 }
 
 export const RegisterTable: React.FC<RegisterTableProps> = ({
@@ -23,11 +25,13 @@ export const RegisterTable: React.FC<RegisterTableProps> = ({
   filteredPurchases,
   filteredJournals,
   filteredSalesReturns,
+  filteredPurchaseReturns,
   formatDateForDisplay,
   formatCurrency,
   salesSummary,
   purchaseSummary,
-  salesReturnSummary
+  salesReturnSummary,
+  purchaseReturnSummary
 }) => {
   if (activeRegister === 'sales') {
     if (filteredSales.length === 0) {
@@ -345,6 +349,49 @@ export const RegisterTable: React.FC<RegisterTableProps> = ({
               <td className="py-2 px-3 font-mono text-right text-slate-800">{formatCurrency(salesReturnSummary.taxable)}</td>
               <td className="py-2 px-3 font-mono text-right text-slate-800">{formatCurrency(salesReturnSummary.gst)}</td>
               <td className="py-2 px-3 font-mono text-right text-indigo-700">{formatCurrency(salesReturnSummary.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (activeRegister === 'purchase_returns') {
+    if (filteredPurchaseReturns.length === 0) {
+      return <div className="py-20 text-center text-slate-400 italic">No purchase returns match the filter criteria.</div>;
+    }
+
+    return (
+      <div className="overflow-x-auto w-full">
+        <table className="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-slate-400 font-bold text-slate-700">
+              <th className="py-2 px-3 text-[11px] uppercase">Date</th>
+              <th className="py-2 px-3 text-[11px] uppercase">Return No</th>
+              <th className="py-2 px-3 text-[11px] uppercase">Supplier Name</th>
+              <th className="py-2 px-3 text-[11px] uppercase">Return Type</th>
+              <th className="py-2 px-3 text-[11px] uppercase text-right">Taxable Val</th>
+              <th className="py-2 px-3 text-[11px] uppercase text-right">GST Amt</th>
+              <th className="py-2 px-3 text-[11px] uppercase text-right">Grand Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredPurchaseReturns.map((r) => (
+              <tr key={r.id} className="border-b border-slate-200/60 hover:bg-slate-50/20 text-slate-800">
+                <td className="py-2 px-3 font-mono text-[11px]">{formatDateForDisplay(r.date)}</td>
+                <td className="py-2 px-3 font-mono font-bold text-indigo-650">{r.return_number}</td>
+                <td className="py-2 px-3 font-bold text-slate-700">{r.supplier_name}</td>
+                <td className="py-2 px-3 text-slate-550 font-semibold">{r.return_type || '-'}</td>
+                <td className="py-2 px-3 font-mono text-right text-slate-650">{formatCurrency(r.taxable_value)}</td>
+                <td className="py-2 px-3 font-mono text-right text-slate-650">{formatCurrency(r.gst_amount)}</td>
+                <td className="py-2 px-3 font-mono font-bold text-right text-slate-850">{formatCurrency(r.total_amount)}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-slate-400 font-bold bg-slate-50/40">
+              <td colSpan={4} className="py-2 px-3 text-[11px] uppercase text-slate-700 font-black">Grand Totals ({filteredPurchaseReturns.length} returns)</td>
+              <td className="py-2 px-3 font-mono text-right text-slate-800">{formatCurrency(purchaseReturnSummary.taxable)}</td>
+              <td className="py-2 px-3 font-mono text-right text-slate-800">{formatCurrency(purchaseReturnSummary.gst)}</td>
+              <td className="py-2 px-3 font-mono text-right text-indigo-700">{formatCurrency(purchaseReturnSummary.total)}</td>
             </tr>
           </tbody>
         </table>

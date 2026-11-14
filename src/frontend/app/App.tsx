@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { Login } from '../pages/Login';
 import logo from '../../../assets/logo.png';
 import { Masters } from '../pages/Masters';
-import { Vouchers, BankVouchers, CashVouchers, JournalVouchers, AllocationEntryPage, PrintAllocationPage, SalesReturnPage } from '../modules/vouchers';
+import { Vouchers, BankVouchers, CashVouchers, JournalVouchers, AllocationEntryPage, PrintAllocationPage, SalesReturnPage, PurchaseReturnPage } from '../modules/vouchers';
 import { Registers } from '../modules/registers';
 import { Settings } from '../pages/Settings';
 import { Modal } from '../components/Modal';
@@ -83,7 +83,7 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [mastersSubTab, setMastersSubTab] = useState<string>('accounts');
   const [voucherType, setVoucherType] = useState<'purchase' | 'sale' | 'challan'>('sale');
-  const [registerType, setRegisterType] = useState<'sales' | 'purchases' | 'journal' | 'sales_returns'>('sales');
+  const [registerType, setRegisterType] = useState<'sales' | 'purchases' | 'journal' | 'sales_returns' | 'purchase_returns'>('sales');
   const [reportType, setReportType] = useState<'party_ledger' | 'outstanding_ledger' | 'overdue_interest'>('party_ledger');
   const [misReportType, setMisReportType] = useState<'trial_balance'>('trial_balance');
 
@@ -254,6 +254,8 @@ export const App: React.FC = () => {
         return <PrintAllocationPage />;
       case 'sales_return':
         return <SalesReturnPage />;
+      case 'purchase_return':
+        return <PurchaseReturnPage />;
       case 'backup':
         return <BackupRestore />;
       case 'registers':
@@ -343,7 +345,7 @@ export const App: React.FC = () => {
               key={item.id}
               onClick={() => handleTabSwitch(item.id)}
               className={`px-3 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'close_financial_year' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation' || activeTab === 'allocation_print' || activeTab === 'sales_return'))
+                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'close_financial_year' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation' || activeTab === 'allocation_print' || activeTab === 'sales_return' || activeTab === 'purchase_return'))
                   ? 'bg-slate-100/80 text-indigo-650 font-extrabold border border-slate-200/50 shadow-inner' 
                   : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50'
               }`}
@@ -539,7 +541,7 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'journal_voucher' || activeTab === 'close_financial_year' || activeTab === 'account_opening' || activeTab === 'stock_opening' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation' || activeTab === 'allocation_print' || activeTab === 'sales_return') && (
+            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'journal_voucher' || activeTab === 'close_financial_year' || activeTab === 'account_opening' || activeTab === 'stock_opening' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation' || activeTab === 'allocation_print' || activeTab === 'sales_return' || activeTab === 'purchase_return') && (
               <div>
                 <div className="flex items-center gap-2 px-3 py-3 rounded-xl bg-indigo-50 text-indigo-700 font-bold mb-3.5 text-xs shadow-sm">
                   <FileText className="w-4 h-4 shrink-0" />
