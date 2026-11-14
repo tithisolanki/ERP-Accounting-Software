@@ -144,6 +144,16 @@ async function runTests() {
       try { await fn(); return false; } catch (e: any) { return String(e.message).includes(messagePart); }
     };
 
+    const salesReturnCols = await db.all('PRAGMA table_info(sales_returns)');
+    check('sales_returns table exists with the expected columns',
+      salesReturnCols.some((c: any) => c.name === 'against_sale_id') &&
+      salesReturnCols.some((c: any) => c.name === 'return_type') &&
+      salesReturnCols.some((c: any) => c.name === 'broker_name'), JSON.stringify(salesReturnCols));
+    const purchaseReturnCols = await db.all('PRAGMA table_info(purchase_returns)');
+    check('purchase_returns table exists with the expected columns',
+      purchaseReturnCols.some((c: any) => c.name === 'against_purchase_id') &&
+      purchaseReturnCols.some((c: any) => c.name === 'broker_name'), JSON.stringify(purchaseReturnCols));
+
     const actor = { id: user.id, username: user.username };
     const quality = await db.get('SELECT * FROM qualities WHERE company_id = ?', [company.id]);
     const description = await db.get('SELECT * FROM descriptions WHERE company_id = ?', [company.id]);
