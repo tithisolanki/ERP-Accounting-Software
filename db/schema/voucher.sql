@@ -369,3 +369,110 @@ CREATE INDEX IF NOT EXISTS idx_allocation_entries_account ON allocation_entries(
 CREATE INDEX IF NOT EXISTS idx_allocation_entries_lookup ON allocation_entries(company_id, side, entry_no);
 CREATE INDEX IF NOT EXISTS idx_allocation_entry_bills_entry ON allocation_entry_bills(allocation_entry_id);
 CREATE INDEX IF NOT EXISTS idx_allocation_entry_bills_bill ON allocation_entry_bills(bill_id);
+
+CREATE TABLE IF NOT EXISTS sales_returns (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  return_number INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  customer_id TEXT NOT NULL,
+  financial_year TEXT NOT NULL,
+  against_sale_id TEXT NOT NULL,
+  against_bill_date TEXT NOT NULL,
+  return_type TEXT NOT NULL,
+  broker_name TEXT,
+  challan_number INTEGER,
+  challan_date TEXT,
+  lr_number TEXT,
+  lr_date TEXT,
+  taxable_value REAL NOT NULL,
+  gst_amount REAL NOT NULL,
+  total_amount REAL NOT NULL,
+  remark TEXT,
+  is_dirty INTEGER DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY(customer_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+  FOREIGN KEY(against_sale_id) REFERENCES sales(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS sales_return_items (
+  id TEXT PRIMARY KEY,
+  sales_return_id TEXT NOT NULL,
+  company_id TEXT NOT NULL,
+  category_id TEXT NOT NULL,
+  quality_id TEXT NOT NULL,
+  description_id TEXT NOT NULL,
+  hsn_id TEXT NOT NULL,
+  pcs INTEGER DEFAULT 0,
+  meters REAL NOT NULL,
+  rate REAL NOT NULL,
+  gst_percentage REAL NOT NULL,
+  taxable_value REAL NOT NULL,
+  gst_amount REAL NOT NULL,
+  total_amount REAL NOT NULL,
+  is_dirty INTEGER DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(sales_return_id) REFERENCES sales_returns(id) ON DELETE CASCADE,
+  FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE RESTRICT,
+  FOREIGN KEY(quality_id) REFERENCES qualities(id) ON DELETE RESTRICT,
+  FOREIGN KEY(description_id) REFERENCES descriptions(id) ON DELETE RESTRICT,
+  FOREIGN KEY(hsn_id) REFERENCES hsn_codes(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS purchase_returns (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  return_number INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  supplier_id TEXT NOT NULL,
+  financial_year TEXT NOT NULL,
+  against_purchase_id TEXT NOT NULL,
+  against_bill_date TEXT NOT NULL,
+  return_type TEXT NOT NULL,
+  broker_name TEXT,
+  challan_number INTEGER,
+  challan_date TEXT,
+  lr_number TEXT,
+  lr_date TEXT,
+  taxable_value REAL NOT NULL,
+  gst_amount REAL NOT NULL,
+  total_amount REAL NOT NULL,
+  remark TEXT,
+  is_dirty INTEGER DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY(supplier_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+  FOREIGN KEY(against_purchase_id) REFERENCES purchases(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS purchase_return_items (
+  id TEXT PRIMARY KEY,
+  purchase_return_id TEXT NOT NULL,
+  company_id TEXT NOT NULL,
+  category_id TEXT NOT NULL,
+  quality_id TEXT NOT NULL,
+  description_id TEXT NOT NULL,
+  hsn_id TEXT NOT NULL,
+  pcs INTEGER DEFAULT 0,
+  meters REAL NOT NULL,
+  rate REAL NOT NULL,
+  gst_percentage REAL NOT NULL,
+  taxable_value REAL NOT NULL,
+  gst_amount REAL NOT NULL,
+  total_amount REAL NOT NULL,
+  is_dirty INTEGER DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(purchase_return_id) REFERENCES purchase_returns(id) ON DELETE CASCADE,
+  FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE RESTRICT,
+  FOREIGN KEY(quality_id) REFERENCES qualities(id) ON DELETE RESTRICT,
+  FOREIGN KEY(description_id) REFERENCES descriptions(id) ON DELETE RESTRICT,
+  FOREIGN KEY(hsn_id) REFERENCES hsn_codes(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_sales_returns_company ON sales_returns(company_id);
+CREATE INDEX IF NOT EXISTS idx_sales_returns_against_sale ON sales_returns(against_sale_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_returns_number ON sales_returns(company_id, financial_year, return_number);
+CREATE INDEX IF NOT EXISTS idx_purchase_returns_company ON purchase_returns(company_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_returns_against_purchase ON purchase_returns(against_purchase_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_purchase_returns_number ON purchase_returns(company_id, financial_year, return_number);
