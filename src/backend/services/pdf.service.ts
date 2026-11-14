@@ -527,6 +527,64 @@ export async function generateSalesReturnPdf(data: SalesReturnPdfData, copies: s
   return generateInvoicePdf(mapped, copies, 'GOODS CREDIT NOTE');
 }
 
+export interface PurchaseReturnPdfData {
+  company: InvoiceData['company'];
+  customer: InvoiceData['customer'];
+  return_number: string;
+  date: string;
+  financial_year: string;
+  taxable_value: number;
+  gst_amount: number;
+  total_amount: number;
+  challan_number: string;
+  challan_date: string;
+  broker_name: string;
+  lr_number: string;
+  lr_date: string;
+  remark: string;
+  items: InvoiceData['items'];
+}
+
+/**
+ * Goods Debit Note (R3): mirrors generateSalesReturnPdf onto the purchase side -- reuses
+ * generateInvoicePdf's layout (same box/table drawing, just a different title), since a
+ * Purchase Return has no credit-days/bale/order/vehicle/freight fields either.
+ */
+export async function generatePurchaseReturnPdf(data: PurchaseReturnPdfData, copies: string[]): Promise<Uint8Array> {
+  const mapped: InvoiceData = {
+    company: data.company,
+    customer: data.customer,
+    invoice_number: data.return_number,
+    date: data.date,
+    financial_year: data.financial_year,
+    taxable_value: data.taxable_value,
+    gst_amount: data.gst_amount,
+    total_amount: data.total_amount,
+    challan_number: data.challan_number || '',
+    challan_date: data.challan_date || '',
+    credit_days: 0,
+    broker_name: data.broker_name || '',
+    bale_number: '',
+    order_number: '',
+    order_date: '',
+    sales_type: '',
+    lr_number: data.lr_number || '',
+    lr_date: data.lr_date || '',
+    transport: '',
+    delivery_at: '',
+    vehicle_number: '',
+    remark: data.remark || '',
+    credit_account: '',
+    cartage: 0,
+    postage: 0,
+    less: 0,
+    less_add: 0,
+    rounded_off: 0,
+    items: data.items
+  };
+  return generateInvoicePdf(mapped, copies, 'GOODS DEBIT NOTE');
+}
+
 export interface ChallanData {
   company: {
     name: string;

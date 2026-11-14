@@ -1,5 +1,5 @@
 export const exportToCSV = (
-  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns',
+  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns' | 'purchase_returns',
   startDate: string,
   endDate: string,
   filteredSales: any[],
@@ -7,7 +7,8 @@ export const exportToCSV = (
   filteredPurchases: any[],
   purchaseRegisterType: 'summarised' | 'detailed',
   filteredJournals: any[],
-  filteredSalesReturns: any[] = []
+  filteredSalesReturns: any[] = [],
+  filteredPurchaseReturns: any[] = []
 ) => {
   let headers: string[] = [];
   let rows: any[] = [];
@@ -132,6 +133,18 @@ export const exportToCSV = (
       r.date,
       r.return_number,
       r.customer_name,
+      r.return_type || '',
+      r.taxable_value,
+      r.gst_amount,
+      r.total_amount
+    ]);
+  } else if (activeRegister === 'purchase_returns') {
+    filename = `Purchase_Return_Register_${startDate}_to_${endDate}.csv`;
+    headers = ['Date', 'Return No', 'Supplier Name', 'Return Type', 'Taxable Val', 'GST Amt', 'Grand Total'];
+    rows = filteredPurchaseReturns.map(r => [
+      r.date,
+      r.return_number,
+      r.supplier_name,
       r.return_type || '',
       r.taxable_value,
       r.gst_amount,

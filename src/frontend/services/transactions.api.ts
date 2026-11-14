@@ -159,3 +159,56 @@ export const SalesReturnService = {
     await apiFetch(`/api/transactions/sales-returns/${id}`, token, { method: 'DELETE' });
   }
 };
+
+export interface PurchaseReturnItemPayload {
+  categoryId: string;
+  qualityId: string;
+  descriptionId?: string | null;
+  descriptionName: string;
+  hsnId?: string | null;
+  hsnCode: string;
+  pcs?: number;
+  meters: number;
+  rate: number;
+  gstPercentage: number;
+}
+
+export interface PurchaseReturnPayload {
+  returnNumber: string;
+  date: string;
+  supplierId: string;
+  financialYear: string;
+  againstPurchaseId: string;
+  againstBillDate: string;
+  returnType: string;
+  brokerName?: string;
+  challanNumber?: string;
+  challanDate?: string;
+  lrNumber?: string;
+  lrDate?: string;
+  remark?: string;
+  confirmOverage?: boolean;
+  items: PurchaseReturnItemPayload[];
+}
+
+export const PurchaseReturnService = {
+  async getAll(token: string): Promise<any[]> {
+    return apiFetch('/api/transactions/purchase-returns', token);
+  },
+
+  async getNextNumber(token: string, financialYear: string): Promise<{ nextNumber: number | string }> {
+    return apiFetch(`/api/transactions/purchase-returns/next-number?fy=${encodeURIComponent(financialYear)}`, token);
+  },
+
+  async create(payload: PurchaseReturnPayload, token: string): Promise<{ success: boolean }> {
+    return saveSalesReturn('POST', '/api/transactions/purchase-returns', payload as unknown as SalesReturnPayload, token);
+  },
+
+  async update(id: string, payload: PurchaseReturnPayload, token: string): Promise<{ success: boolean }> {
+    return saveSalesReturn('PUT', `/api/transactions/purchase-returns/${id}`, payload as unknown as SalesReturnPayload, token);
+  },
+
+  async delete(id: string, token: string): Promise<void> {
+    await apiFetch(`/api/transactions/purchase-returns/${id}`, token, { method: 'DELETE' });
+  }
+};

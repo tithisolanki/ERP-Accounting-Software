@@ -1,17 +1,19 @@
 import React from 'react';
 
 interface RegisterSummaryProps {
-  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns';
+  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns' | 'purchase_returns';
   salesRegisterType: 'summarised' | 'detailed';
   purchaseRegisterType: 'summarised' | 'detailed';
   filteredSales: any[];
   filteredPurchases: any[];
   filteredJournals: any[];
   filteredSalesReturns: any[];
+  filteredPurchaseReturns: any[];
   salesSummary: any;
   purchaseSummary: any;
   journalSummary: any;
   salesReturnSummary: any;
+  purchaseReturnSummary: any;
   formatCurrency: (val: number) => string;
 }
 
@@ -27,10 +29,10 @@ export const RegisterSummary: React.FC<RegisterSummaryProps> = ({
   journalSummary,
   formatCurrency
 }) => {
-  // Sales Return register is a single flat view (no summarised/detailed toggle), with its own
-  // grand-totals row already drawn inside RegisterTable -- the same reason 'sales'/'purchases'
-  // summarised view (below) don't get a second summary block here either.
-  if (activeRegister === 'sales_returns') {
+  // Sales/Purchase Return registers are a single flat view (no summarised/detailed toggle), with
+  // their own grand-totals row already drawn inside RegisterTable -- the same reason
+  // 'sales'/'purchases' summarised view (below) don't get a second summary block here either.
+  if (activeRegister === 'sales_returns' || activeRegister === 'purchase_returns') {
     return null;
   }
 

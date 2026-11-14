@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface RegisterFiltersProps {
-  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns';
+  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns' | 'purchase_returns';
   startDate: string;
   setStartDate: (v: string) => void;
   endDate: string;
@@ -20,6 +20,9 @@ interface RegisterFiltersProps {
 
   salesReturnCustomer: string;
   setSalesReturnCustomer: (v: string) => void;
+
+  purchaseReturnSupplier: string;
+  setPurchaseReturnSupplier: (v: string) => void;
 
   purchaseSupplier: string;
   setPurchaseSupplier: (v: string) => void;
@@ -60,6 +63,9 @@ export const RegisterFilters: React.FC<RegisterFiltersProps> = ({
 
   salesReturnCustomer,
   setSalesReturnCustomer,
+
+  purchaseReturnSupplier,
+  setPurchaseReturnSupplier,
 
   purchaseSupplier,
   setPurchaseSupplier,
@@ -216,6 +222,23 @@ export const RegisterFilters: React.FC<RegisterFiltersProps> = ({
             >
               <option value="">-- All Customers --</option>
               {accounts.filter(p => p.group_name === 'Sundry Debtors').map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Purchase Return Filters */}
+        {activeRegister === 'purchase_returns' && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] uppercase font-bold text-slate-500">Supplier Name</label>
+            <select
+              value={purchaseReturnSupplier}
+              onChange={(e) => setPurchaseReturnSupplier(e.target.value)}
+              className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-semibold text-slate-800 h-8 text-xs cursor-pointer"
+            >
+              <option value="">-- All Suppliers --</option>
+              {accounts.filter(p => p.group_name === 'Sundry Creditors').map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>

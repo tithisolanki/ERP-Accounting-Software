@@ -13,6 +13,7 @@ export const searchTargets: SearchTarget[] = [
   { name: 'Purchase Register', tab: 'registers', sub: 'purchases', keywords: 'purchase register register audit' },
   { name: 'Journal Register', tab: 'registers', sub: 'journal', keywords: 'journal register register audit double entry' },
   { name: 'Sales Return', tab: 'sales_return', sub: null, keywords: 'sales return goods credit note return vouchers data entry' },
+  { name: 'Purchase Return', tab: 'purchase_return', sub: null, keywords: 'purchase return goods debit note return vouchers data entry' },
   { name: 'Accounts Master', tab: 'masters', sub: 'accounts', keywords: 'accounts parties customers suppliers masters manager' },
   { name: 'Inventory Items', tab: 'masters', sub: 'qualities', keywords: 'inventory items products qualities categories masters manager' },
   { name: 'Broker Master', tab: 'masters', sub: 'brokers', keywords: 'brokers brokers listing masters manager' },
@@ -77,7 +78,8 @@ export const allocationEntrySidebarItems = [
 // AC_PLUS files "Sales Return Entry" as a direct sibling of Sales Invoice under Data Entry
 // (confirmed in AC_PLUS_SCREEN_MAP.md), not nested under any extra "Returns" submenu.
 export const goodsReturnsSidebarItems = [
-  { id: 'sales_return', name: 'Sales Return' }
+  { id: 'sales_return', name: 'Sales Return' },
+  { id: 'purchase_return', name: 'Purchase Return' }
 ];
 
 export const accountVoucherItems = [
@@ -100,7 +102,8 @@ export const registerSidebarItems = [
   { id: 'sales', name: 'Sales Register' },
   { id: 'purchases', name: 'Purchase Register' },
   { id: 'journal', name: 'Journal Register' },
-  { id: 'sales_returns', name: 'Sales Return Register' }
+  { id: 'sales_returns', name: 'Sales Return Register' },
+  { id: 'purchase_returns', name: 'Purchase Return Register' }
 ];
 
 // AC_PLUS files Trial Balance under its separate M.I.S.Reports menu

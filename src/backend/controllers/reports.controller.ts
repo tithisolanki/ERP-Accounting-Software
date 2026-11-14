@@ -2,8 +2,9 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { reportsService } from '../services/reports.service';
 import { salesReturnRepository } from '../repositories/sales-return.repository';
+import { purchaseReturnRepository } from '../repositories/purchase-return.repository';
 import { accountRepository, companyRepository } from '../repositories/masters.repository';
-import { generateSalesReturnPdf } from '../services/pdf.service';
+import { generateSalesReturnPdf, generatePurchaseReturnPdf } from '../services/pdf.service';
 
 export class ReportsController {
   async getDashboardSummary(req: AuthenticatedRequest, res: Response) {
@@ -243,6 +244,83 @@ export class ReportsController {
       return res.end(Buffer.from(pdfBuffer));
     } catch (error: any) {
       console.error('Sales Return PDF Generation Error:', error);
+      const status = error.message.includes('not found') ? 404 : 500;
+      return res.status(status).json({ error: error.message });
+    }
+  }
+
+  async getPurchaseReturnPdf(req: AuthenticatedRequest, res: Response) {
+    const companyId = req.user?.company_id;
+    const { id } = req.params;
+    if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
+
+    try {
+      const purchaseReturn = await purchaseReturnRepository.findPurchaseReturnById(companyId, id);
+      if (!purchaseReturn) throw new Error('Purchase return not found.');
+
+      const supplier = await accountRepository.findById(purchaseReturn.supplier_id, companyId);
+      if (!supplier) throw new Error('Supplier not found.');
+
+      const company = await companyRepository.findById(companyId);
+      const items = await purchaseReturnRepository.findItemsByPurchaseReturnId(id);
+
+      const copiesParam = (req.query.copies as string) || 'original,duplicate,triplicate,quadruplicate';
+      const copies = copiesParam.split(',').filter(Boolean);
+
+      const pdfBuffer = await generatePurchaseReturnPdf({
+        company: {
+          name: company?.name || 'TexFin Vendor',
+          gst_number: company?.gst_number || undefined,
+          pan_number: company?.pan_number || undefined,
+          address: company?.address || undefined,
+          phone: company?.phone || undefined,
+          email: company?.email || undefined,
+          bank1_name: company?.bank1_name || undefined,
+          bank1_account_no: company?.bank1_account_no || undefined,
+          bank1_ifsc: company?.bank1_ifsc || undefined,
+          bank2_name: company?.bank2_name || undefined,
+          bank2_account_no: company?.bank2_account_no || undefined,
+          bank2_ifsc: company?.bank2_ifsc || undefined,
+          credit_interest_rate: company?.credit_interest_rate ?? undefined
+        },
+        customer: {
+          name: supplier.name,
+          gst_number: supplier.gst_number || undefined,
+          address: supplier.address || undefined,
+          state: supplier.state || undefined,
+          mobile_number: supplier.mobile_number || undefined
+        },
+        return_number: String(purchaseReturn.return_number),
+        date: purchaseReturn.date,
+        financial_year: purchaseReturn.financial_year,
+        taxable_value: purchaseReturn.taxable_value,
+        gst_amount: purchaseReturn.gst_amount,
+        total_amount: purchaseReturn.total_amount,
+        challan_number: purchaseReturn.challan_number ? String(purchaseReturn.challan_number) : '',
+        challan_date: purchaseReturn.challan_date || '',
+        broker_name: purchaseReturn.broker_name || '',
+        lr_number: purchaseReturn.lr_number || '',
+        lr_date: purchaseReturn.lr_date || '',
+        remark: purchaseReturn.remark || '',
+        items: items.map((i: any) => ({
+          product_name: i.quality_name,
+          hsn_code: i.hsn_code !== null && i.hsn_code !== undefined ? String(i.hsn_code) : '',
+          cloth_type: i.category_name || '',
+          pcs: i.pcs || 0,
+          quantity: i.meters,
+          rate: i.rate,
+          gst_percentage: i.gst_percentage,
+          taxable_value: i.taxable_value,
+          gst_amount: i.gst_amount,
+          total_amount: i.total_amount
+        }))
+      }, copies);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="purchase-return-${id}.pdf"`);
+      return res.end(Buffer.from(pdfBuffer));
+    } catch (error: any) {
+      console.error('Purchase Return PDF Generation Error:', error);
       const status = error.message.includes('not found') ? 404 : 500;
       return res.status(status).json({ error: error.message });
     }
