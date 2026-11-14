@@ -6,7 +6,7 @@ const router = Router();
 
 router.get('/outstanding/:accountId', authenticateJWT, (req, res) => accVoucherController.getOutstandingBills(req, res));
 router.get('/allocation/:side/outstanding/:accountId', authenticateJWT, (req, res) => accVoucherController.getOutstandingBillsForAllocation(req, res));
-router.get('/allocation/:side/print-pdf', authenticateJWT, (req, res) => accVoucherController.getAllocationPrintPdf(req, res));
+router.post('/allocation/:side/print-pdf', authenticateJWT, (req, res) => accVoucherController.getAllocationPrintPdf(req, res));
 router.get('/allocation/:side/entry/:entryNo', authenticateJWT, (req, res) => accVoucherController.getAllocationEntryDetail(req, res));
 router.get('/allocation/:side', authenticateJWT, (req, res) => accVoucherController.getAllocationEntries(req, res));
 router.post('/allocation', authenticateJWT, (req, res) => accVoucherController.saveAllocationEntry(req, res));
