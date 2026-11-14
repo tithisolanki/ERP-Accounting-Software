@@ -6,7 +6,7 @@ import { Table } from '../../../components/Table';
 interface RecentSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  activeType: 'purchase' | 'sale' | 'payment' | 'receipt' | 'challan';
+  activeType: 'purchase' | 'sale' | 'payment' | 'receipt' | 'challan' | 'sales_return' | 'purchase_return';
   recentVouchers: any[];
   loadVoucherIntoForm: (v: any) => void;
 }
@@ -20,7 +20,13 @@ export const RecentSearchModal: React.FC<RecentSearchModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const titleText = `Search Recent ${activeType === 'sale' ? 'Sales Invoices' : activeType === 'challan' ? 'Delivery Challans' : 'Purchase Bills'}`;
+  const titleText = `Search Recent ${
+    activeType === 'sale' ? 'Sales Invoices'
+      : activeType === 'challan' ? 'Delivery Challans'
+      : activeType === 'sales_return' ? 'Sales Returns'
+      : activeType === 'purchase_return' ? 'Purchase Returns'
+      : 'Purchase Bills'
+  }`;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={titleText} size="lg">
@@ -39,10 +45,13 @@ export const RecentSearchModal: React.FC<RecentSearchModalProps> = ({
                 >
                   <td className="px-4 py-2.5 font-mono">{v.date}</td>
                   <td className="px-4 py-2.5 font-mono text-indigo-650">
-                    {activeType === 'sale' ? v.invoice_number : activeType === 'challan' ? v.challan_number : v.purchase_number}
+                    {activeType === 'sale' ? v.invoice_number
+                      : activeType === 'challan' ? v.challan_number
+                      : activeType === 'sales_return' || activeType === 'purchase_return' ? v.return_number
+                      : v.purchase_number}
                   </td>
                   <td className="px-4 py-2.5 truncate max-w-[220px]">
-                    {activeType === 'sale' || activeType === 'challan' ? v.customer_name : v.supplier_name}
+                    {activeType === 'sale' || activeType === 'challan' || activeType === 'sales_return' ? v.customer_name : v.supplier_name}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-900">
                     Rs. {v.total_amount.toFixed(2)}

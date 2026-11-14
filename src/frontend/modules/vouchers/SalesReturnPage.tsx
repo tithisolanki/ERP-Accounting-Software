@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
-import { Table } from '../../components/Table';
 import { Modal } from '../../components/Modal';
 import { ItemEntryForm } from './components/ItemEntryForm';
 import { ProductGridTable } from './components/ProductGridTable';
 import { PieceMetersModal } from './components/PieceMetersModal';
+import { RecentSearchModal } from './components/RecentSearchModal';
 import { AccountService, LookupService, AccVoucherService, SalesReturnService, OverReturnApiError } from '../../services/api';
 import type { OutstandingBill } from '../../services/accvoucher.api';
 import { API_URL } from '../../services/client';
-import { Save, Printer, Trash2, Plus, Edit3 } from 'lucide-react';
+import { Save, Printer, Trash2, Plus, Search } from 'lucide-react';
 
 const formatCurrency = (val: number) => (val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -78,6 +78,7 @@ export const SalesReturnPage: React.FC = () => {
   const [tempPieceText, setTempPieceText] = useState('');
 
   const [overageBalanceDue, setOverageBalanceDue] = useState<number | null>(null);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -471,6 +472,15 @@ export const SalesReturnPage: React.FC = () => {
               <Button type="button" variant="secondary" onClick={handleNew} className="font-bold cursor-pointer">
                 <Plus className="w-4 h-4 mr-1.5" /> New
               </Button>
+              <Button type="button" variant="secondary" onClick={() => setSearchModalOpen(true)} className="font-bold cursor-pointer">
+                <Search className="w-4 h-4 mr-1.5" /> Search
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => handlePrint(editingReturnId!)} disabled={!editingReturnId} className="font-bold cursor-pointer">
+                <Printer className="w-4 h-4 mr-1.5" /> Print
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => handleDelete(editingReturnId!, Number(returnNo))} disabled={!editingReturnId} className="font-bold cursor-pointer text-rose-650">
+                <Trash2 className="w-4 h-4 mr-1.5" /> Delete
+              </Button>
               <Button type="button" variant="primary" onClick={() => handleSave(false)} disabled={!!validationReason} className="font-bold cursor-pointer">
                 <Save className="w-4 h-4 mr-1.5" /> {editingReturnId ? 'Update Sales Return' : 'Save Sales Return'}
               </Button>
@@ -479,30 +489,13 @@ export const SalesReturnPage: React.FC = () => {
         </div>
       </Card>
 
-      <Card title="Saved Sales Returns">
-        <Table headers={['Return No.', 'Date', 'Customer', 'Type', 'Amount', '']}>
-          {savedReturns.map((r) => (
-            <tr key={r.id} className="border-b border-slate-100 last:border-0">
-              <td className="px-4 py-2 font-bold text-indigo-650">{r.return_number}</td>
-              <td className="px-4 py-2">{r.date}</td>
-              <td className="px-4 py-2">{r.customer_name}</td>
-              <td className="px-4 py-2">{r.return_type}</td>
-              <td className="px-4 py-2">{formatCurrency(r.total_amount)}</td>
-              <td className="px-4 py-2 text-right">
-                <button onClick={() => handleEdit(r)} title="Edit" className="w-7 h-7 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 inline-flex items-center justify-center cursor-pointer mr-1">
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => handlePrint(r.id)} title="Print Goods Credit Note" className="w-7 h-7 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 inline-flex items-center justify-center cursor-pointer mr-1">
-                  <Printer className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => handleDelete(r.id, r.return_number)} title="Delete" className="w-7 h-7 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 inline-flex items-center justify-center cursor-pointer">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
+      <RecentSearchModal
+        isOpen={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        activeType="sales_return"
+        recentVouchers={savedReturns}
+        loadVoucherIntoForm={handleEdit}
+      />
 
       <PieceMetersModal
         isOpen={pieceModalOpen}
