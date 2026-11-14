@@ -132,6 +132,7 @@ export class AccVoucherRepository {
     const excludeAllocationEntryIds = options.excludeAllocationEntryIds || [];
     const excludeClause = excludeLineIds.length ? `AND ra.receipt_id NOT IN (${excludeLineIds.map(() => '?').join(',')})` : '';
     const excludeClausePa = excludeLineIds.length ? `AND pa.payment_id NOT IN (${excludeLineIds.map(() => '?').join(',')})` : '';
+    const excludeClauseSr = excludeLineIds.length ? `AND id NOT IN (${excludeLineIds.map(() => '?').join(',')})` : '';
     const excludeAllocClause = excludeAllocationEntryIds.length
       ? `AND allocation_entry_id NOT IN (${excludeAllocationEntryIds.map(() => '?').join(',')})` : '';
     const havingClause = includeAllEntries ? 'HAVING 1 = 1' : 'HAVING balanceDue > 0.005';
@@ -140,18 +141,22 @@ export class AccVoucherRepository {
       `SELECT s.id AS billId, 'sale' AS billType, s.invoice_number AS billNumber, s.date,
               s.total_amount AS totalAmount,
               COALESCE(SUM(ra.amount_applied), 0) + COALESCE(SUM(ra.discount_amount), 0) + COALESCE(MAX(aeb.applied), 0) + COALESCE(MAX(aeb.discount), 0) AS allocated,
-              s.total_amount - COALESCE(SUM(ra.amount_applied), 0) - COALESCE(SUM(ra.discount_amount), 0) - COALESCE(MAX(aeb.applied), 0) - COALESCE(MAX(aeb.discount), 0) AS balanceDue
+              s.total_amount - COALESCE(SUM(ra.amount_applied), 0) - COALESCE(SUM(ra.discount_amount), 0) - COALESCE(MAX(aeb.applied), 0) - COALESCE(MAX(aeb.discount), 0) - COALESCE(MAX(sr.returned), 0) AS balanceDue
        FROM sales s
        LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id ${excludeClause}
        LEFT JOIN (
          SELECT bill_id, SUM(amount_applied) AS applied, SUM(discount_amount) AS discount
          FROM allocation_entry_bills WHERE bill_type = 'sale' ${excludeAllocClause} GROUP BY bill_id
        ) aeb ON aeb.bill_id = s.id
+       LEFT JOIN (
+         SELECT against_sale_id, SUM(total_amount) AS returned
+         FROM sales_returns WHERE 1 = 1 ${excludeClauseSr} GROUP BY against_sale_id
+       ) sr ON sr.against_sale_id = s.id
        WHERE s.company_id = ? AND s.customer_id = ?
        GROUP BY s.id
        ${havingClause}
        ORDER BY s.date`,
-      [...excludeLineIds, ...excludeAllocationEntryIds, companyId, accountId]
+      [...excludeLineIds, ...excludeAllocationEntryIds, ...excludeLineIds, companyId, accountId]
     );
     const purchases = billType === 'sale' ? [] : await db.all(
       `SELECT p.id AS billId, 'purchase' AS billType, p.purchase_number AS billNumber, p.date,

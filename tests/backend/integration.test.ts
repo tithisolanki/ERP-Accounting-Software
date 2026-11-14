@@ -1,6 +1,7 @@
 import { getDb, initDb, closeDb } from '../../src/backend/db';
 import { reportsService } from '../../src/backend/services/reports.service';
 import { salesService } from '../../src/backend/services/sales.service';
+import { salesReturnService, OverReturnError } from '../../src/backend/services/sales-return.service';
 import { purchaseService } from '../../src/backend/services/purchase.service';
 import { accVoucherService } from '../../src/backend/services/accvoucher.service';
 import { accVoucherRepository } from '../../src/backend/repositories/accvoucher.repository';
@@ -760,6 +761,97 @@ async function runTests() {
     const runningRows = allocRowsFullRange.filter((r: any) => r.billId === runningBalanceBill.id).sort((a: any, b: any) => a.voucherDate < b.voucherDate ? -1 : 1);
     check('Both allocations against the same bill (RCPT-OA1 pattern + ALLOC-OA-1 + ALLOC-KS-1) appear as separate rows',
       runningRows.length >= 2, JSON.stringify(runningRows));
+
+    console.log('\nTest 23: Sales Return -- itemized, against-bill linkage, over-return warn-and-confirm, account mismatch reject...');
+    const now23 = new Date().toISOString();
+    const returnCustomerId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Return Customer', 0, 'Sundry Debtors', 0, ?)`, [returnCustomerId, company.id, now23]);
+
+    // Sale A: used for the basic create / account-mismatch / over-return warn+confirm checks.
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9601, date: '2026-01-01', customerId: returnCustomerId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 100, rate: 100, gstPercentage: 5 }]
+    });
+    const srSaleA = await db.get('SELECT id, total_amount, date FROM sales WHERE invoice_number = 9601 AND company_id = ?', [company.id]);
+    check('Sale A total = 10,500', srSaleA.total_amount === 10500, `got ${srSaleA.total_amount}`);
+
+    const returnOk = await salesReturnService.createSalesReturn(company.id, actor, {
+      returnNumber: 1, date: '2026-03-01', customerId: returnCustomerId, financialYear: '2025-26',
+      againstSaleId: srSaleA.id, againstBillDate: srSaleA.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+    const billsAfterReturn1 = await accVoucherRepository.getOutstandingBills(company.id, returnCustomerId);
+    const srSaleABillAfterReturn1 = billsAfterReturn1.find((b: any) => b.billId === srSaleA.id);
+    check('Sales Return creates successfully and reduces the bill\'s balanceDue (10500 - 1050 = 9450)',
+      !!returnOk && srSaleABillAfterReturn1?.balanceDue === 9450, JSON.stringify(srSaleABillAfterReturn1));
+
+    check('Account mismatch is rejected outright', await rejects(() => salesReturnService.createSalesReturn(company.id, actor, {
+      returnNumber: 2, date: '2026-03-02', customerId: customer.id, financialYear: '2025-26',
+      againstSaleId: srSaleA.id, againstBillDate: srSaleA.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 5, rate: 100, gstPercentage: 5 }]
+    }), 'does not belong'));
+
+    const overReturnBody = {
+      returnNumber: 2, date: '2026-03-05', customerId: returnCustomerId, financialYear: '2025-26',
+      againstSaleId: srSaleA.id, againstBillDate: srSaleA.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 91, rate: 100, gstPercentage: 5 }]
+    };
+    let overReturnError: any = null;
+    try {
+      await salesReturnService.createSalesReturn(company.id, actor, overReturnBody);
+    } catch (e) {
+      overReturnError = e;
+    }
+    check('Over-return without confirmOverage throws OverReturnError (not a generic Error)',
+      overReturnError instanceof OverReturnError && overReturnError.balanceDue === 9450 && String(overReturnError.message).includes('exceeds'),
+      String(overReturnError?.message));
+
+    const confirmedReturnId = await salesReturnService.createSalesReturn(company.id, actor, { ...overReturnBody, confirmOverage: true });
+    check('The same over-return with confirmOverage:true saves successfully', !!confirmedReturnId);
+
+    // Sale B: used for the cross-financial-year bill lookup check.
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9602, date: '2026-01-10', customerId: returnCustomerId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 50, rate: 100, gstPercentage: 5 }]
+    });
+    const srSaleB = await db.get('SELECT id, total_amount, date FROM sales WHERE invoice_number = 9602 AND company_id = ?', [company.id]);
+    check('Sale B total = 5,250', srSaleB.total_amount === 5250, `got ${srSaleB.total_amount}`);
+
+    await salesReturnService.createSalesReturn(company.id, actor, {
+      returnNumber: 1, date: '2026-04-05', customerId: returnCustomerId, financialYear: '2026-27',
+      againstSaleId: srSaleB.id, againstBillDate: srSaleB.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+    const billsAfterCrossFyReturn = await accVoucherRepository.getOutstandingBills(company.id, returnCustomerId);
+    const srSaleBBill = billsAfterCrossFyReturn.find((b: any) => b.billId === srSaleB.id);
+    check('A return dated in a different financial year than its bill still finds the bill correctly (5250 - 1050 = 4200)',
+      srSaleBBill?.balanceDue === 4200, JSON.stringify(srSaleBBill));
+
+    // Sale C: used for the edit-does-not-double-count check (zero GST for clean arithmetic).
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9603, date: '2026-01-15', customerId: returnCustomerId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 42, rate: 100, gstPercentage: 0 }]
+    });
+    const srSaleC = await db.get('SELECT id, total_amount, date FROM sales WHERE invoice_number = 9603 AND company_id = ?', [company.id]);
+    check('Sale C total = 4,200', srSaleC.total_amount === 4200, `got ${srSaleC.total_amount}`);
+
+    const returnCId = await salesReturnService.createSalesReturn(company.id, actor, {
+      returnNumber: 3, date: '2026-03-10', customerId: returnCustomerId, financialYear: '2025-26',
+      againstSaleId: srSaleC.id, againstBillDate: srSaleC.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 5, rate: 100, gstPercentage: 0 }]
+    });
+    // Edit to a total (4000) that only fits if the update excludes this return's OWN prior 500
+    // from the balance check -- without that exclusion the (buggy) check would see only
+    // 4200 - 500 = 3700 room left and wrongly throw OverReturnError for a 4000 edit.
+    await salesReturnService.updateSalesReturn(company.id, returnCId, actor, {
+      returnNumber: 3, date: '2026-03-10', customerId: returnCustomerId, financialYear: '2025-26',
+      againstSaleId: srSaleC.id, againstBillDate: srSaleC.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 40, rate: 100, gstPercentage: 0 }]
+    });
+    const billsAfterEdit = await accVoucherRepository.getOutstandingBills(company.id, returnCustomerId);
+    const srSaleCBillAfterEdit = billsAfterEdit.find((b: any) => b.billId === srSaleC.id);
+    check('Editing a return does not double-count its own prior effect on the bill\'s balanceDue (4200 - 4000 = 200, not 4200 - 500 - 4000 = -300)',
+      srSaleCBillAfterEdit?.balanceDue === 200, JSON.stringify(srSaleCBillAfterEdit));
 
     await closeDb();
     console.log('\nDatabase closed.');
