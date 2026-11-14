@@ -100,6 +100,10 @@ export class AccVoucherController {
     }
   }
 
+  // POST, not GET+query string: a company can have 1000+ accounts, and "Select All" means every
+  // one of them can end up in accountIds -- a GET URL with 1000+ UUIDs is tens of thousands of
+  // characters, which Node's HTTP server itself rejects (431 Request Header Fields Too Large)
+  // before the request even reaches this handler. The body has no such limit.
   async getAllocationPrintPdf(req: AuthenticatedRequest, res: Response) {
     const companyId = req.user?.company_id;
     if (!companyId) return res.status(400).json({ error: 'Company scope required.' });
@@ -108,9 +112,9 @@ export class AccVoucherController {
     if (side !== 'debtor' && side !== 'creditor') {
       return res.status(400).json({ error: 'Invalid side.' });
     }
-    const accountIds = ((req.query.accountIds as string) || '').split(',').filter(Boolean);
-    const startDate = req.query.startDate as string;
-    const endDate = req.query.endDate as string;
+    const accountIds: string[] = Array.isArray(req.body?.accountIds) ? req.body.accountIds.filter(Boolean) : [];
+    const startDate = req.body?.startDate as string;
+    const endDate = req.body?.endDate as string;
     if (accountIds.length === 0 || !startDate || !endDate) {
       return res.status(400).json({ error: 'accountIds, startDate and endDate are required.' });
     }
