@@ -139,12 +139,6 @@ export class AccVoucherRepository {
   }
 
   /**
-   * Outstanding bills across several accounts at once (for the Outstanding & Ageing report),
-   * with each bill's account name/broker/credit_days attached for grouping and ageing.
-   * "asOfDate" limits which bills are considered; "paymentUpto" limits which receipts/payments
-   * count against them — matching AC_PLUS's "Outstanding as on Date" + "Payment Including upto Date".
-   */
-  /**
    * Debtors Outstanding Ledger (R6, debtors only -- AC_PLUS's ADEBOUTLEDGER form; the mirrored
    * ACREOUTLEDGER "Creditors Outstanding Ledger" is a separate, unbuilt screen). companyId null
    * + an admin caller means "Include All Companies". state/city/broker narrow by the account's
@@ -169,8 +163,8 @@ export class AccVoucherRepository {
        LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id
        LEFT JOIN receipts rcpt ON rcpt.id = ra.receipt_id
        WHERE (? IS NULL OR s.company_id = ?) AND s.customer_id IN (${placeholders}) AND s.date <= ?
-         AND (? IS NULL OR a.state = ?) AND (? IS NULL OR a.city = ?)
-         AND (? IS NULL OR COALESCE(NULLIF(s.broker_name, ''), a.broker) = ?)
+         AND (? IS NULL OR LOWER(TRIM(a.state)) = LOWER(TRIM(?))) AND (? IS NULL OR LOWER(TRIM(a.city)) = LOWER(TRIM(?)))
+         AND (? IS NULL OR LOWER(TRIM(COALESCE(NULLIF(s.broker_name, ''), a.broker))) = LOWER(TRIM(?)))
        GROUP BY s.id
        HAVING ? = 1 OR balanceDue > 0.005
        ORDER BY s.date`,

@@ -139,8 +139,10 @@ export class ReportsService {
         const overdueDays = Math.floor((asOf - dueDate.getTime()) / 86400000);
         return { ...b, dueDate: dueDate.toISOString().split('T')[0], overdueDays };
       })
-      .filter(b => !dueOnly || b.overdueDays > 0)
-      .filter(b => !overdueDaysThreshold || b.overdueDays >= overdueDaysThreshold);
+      // A fully/over-paid bill (balanceDue ~0, only ever present here via includingPaidBills)
+      // is never genuinely "due" or "overdue" -- it's shown for the record, not counted as owed.
+      .filter(b => !dueOnly || (b.balanceDue > 0.005 && b.overdueDays > 0))
+      .filter(b => !overdueDaysThreshold || (b.balanceDue > 0.005 && b.overdueDays >= overdueDaysThreshold));
 
     // Grouped by accountId (not name, which two accounts could share); broker groups by the
     // broker string itself since there's no separate broker id to key on here.

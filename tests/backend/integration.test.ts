@@ -474,11 +474,28 @@ async function runTests() {
       lines: [{ accountId: outstandingCustomerId, amount: saleOA3.total_amount, allocations: [{ billId: saleOA3.id, amount: saleOA3.total_amount }] }]
     });
     const withoutPaid = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-06-01', 'account', false, 0, true);
-    check('Including Paid Bills off (default): a fully paid bill is hidden',
-      !withoutPaid[0]?.bills.some((b: any) => b.billNumber === 9202), JSON.stringify(withoutPaid));
+    check('Including Paid Bills off (default): a fully paid bill is hidden, only the unpaid bill remains',
+      withoutPaid[0]?.bills.length === 1 && !withoutPaid[0]?.bills.some((b: any) => b.billNumber === 9202), JSON.stringify(withoutPaid));
     const withPaid = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-06-01', 'account', false, 0, true, undefined, undefined, undefined, true);
     check('Including Paid Bills on: the same fully paid bill now appears',
       withPaid[0]?.bills.some((b: any) => b.billNumber === 9202), JSON.stringify(withPaid));
+
+    const paidBillNeverDue = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-06-01', 'account', true, 0, true, undefined, undefined, undefined, true);
+    check('A fully paid bill is never "Due", even with Including Paid Bills on and a Due Bills filter',
+      !paidBillNeverDue[0]?.bills.some((b: any) => b.billNumber === 9202), JSON.stringify(paidBillNeverDue));
+    const paidBillNeverOverThreshold = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-06-01', 'account', false, 30, true, undefined, undefined, undefined, true);
+    check('A fully paid bill never counts toward the Over Due Days threshold either',
+      !paidBillNeverOverThreshold[0]?.bills.some((b: any) => b.billNumber === 9202), JSON.stringify(paidBillNeverOverThreshold));
+
+    const wrongCity = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-03-01', 'broker', false, 0, true, undefined, 'Mumbai');
+    check('City filter excludes a non-matching city', wrongCity.length === 0, JSON.stringify(wrongCity));
+    const exactThreshold = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-03-01', 'broker', false, 106, true);
+    check('Over Due Days threshold is inclusive (>=): 106 includes a bill exactly 106 days overdue', exactThreshold.length === 1, JSON.stringify(exactThreshold));
+
+    const byStateLowerCase = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-03-01', 'broker', false, 0, true, 'gujarat');
+    check('State filter matches case-insensitively (AC_PLUS data is often inconsistently cased)', byStateLowerCase.length === 1, JSON.stringify(byStateLowerCase));
+    const byStatePadded = await reportsService.getOutstandingLedger(company.id, [outstandingCustomerId], '2026-06-01', '2026-03-01', 'broker', false, 0, true, ' Gujarat ');
+    check('State filter trims surrounding whitespace', byStatePadded.length === 1, JSON.stringify(byStatePadded));
 
     console.log('\nTest 20: getOverdueBillsWithPaymentSplit splits payments by whether they landed before or on/after the BILL\'s own due date, and getOverdueInterestReport applies simple interest...');
     const now20 = new Date().toISOString();

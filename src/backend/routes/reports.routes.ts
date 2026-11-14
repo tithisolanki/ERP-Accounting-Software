@@ -25,7 +25,7 @@ router.get('/accounts-by-group', authenticateJWT, (req, res) => reportsControlle
 router.get('/party-ledger-pdf', authenticateJWT, (req, res) => reportsController.getPartyLedgerPdf(req, res));
 
 // ==========================================
-// 2d. Outstanding & Ageing (by account or broker)
+// 2d. Debtors Outstanding Ledger (by account or broker)
 // ==========================================
 router.get('/outstanding-ledger', authenticateJWT, (req, res) => reportsController.getOutstandingLedger(req, res));
 

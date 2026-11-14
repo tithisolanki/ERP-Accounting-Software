@@ -102,7 +102,7 @@ export const OutstandingLedgerPage: React.FC = () => {
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] uppercase font-bold text-slate-500">Over Due Days (0 for all)</label>
-              <input type="number" value={overdueDays} onChange={(e) => setOverdueDays(e.target.value)}
+              <input type="number" min="0" value={overdueDays} onChange={(e) => setOverdueDays(e.target.value)}
                 className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs" />
             </div>
           </div>
@@ -159,18 +159,20 @@ export const OutstandingLedgerPage: React.FC = () => {
       {outstandingGroups.map((group, i) => (
         <Card key={`${group.groupName}-${i}`} title={group.groupName}
           subtitle={`Outstanding: ${formatCurrency(group.totalOutstanding)}`}>
-          <Table headers={['Bill No.', 'Date', 'Due Date', 'Overdue Days', 'Amount', 'Balance Due']}>
-            {group.bills.map((bill: any) => (
-              <tr key={bill.billId} className="border-b border-slate-100 last:border-0">
-                <td className="px-4 py-2">{bill.billNumber}</td>
-                <td className="px-4 py-2">{bill.date}</td>
-                <td className="px-4 py-2">{bill.dueDate}</td>
-                <td className={`px-4 py-2 font-bold ${bill.overdueDays > 0 ? 'text-rose-600' : 'text-slate-600'}`}>{bill.overdueDays}</td>
-                <td className="px-4 py-2">{formatCurrency(bill.totalAmount)}</td>
-                <td className="px-4 py-2 font-bold">{formatCurrency(bill.balanceDue)}</td>
-              </tr>
-            ))}
-          </Table>
+          {detailed && (
+            <Table headers={['Bill No.', 'Date', 'Due Date', 'Overdue Days', 'Amount', 'Balance Due']}>
+              {group.bills.map((bill: any) => (
+                <tr key={bill.billId} className="border-b border-slate-100 last:border-0">
+                  <td className="px-4 py-2">{bill.billNumber}</td>
+                  <td className="px-4 py-2">{bill.date}</td>
+                  <td className="px-4 py-2">{bill.dueDate}</td>
+                  <td className={`px-4 py-2 font-bold ${bill.balanceDue > 0.005 && bill.overdueDays > 0 ? 'text-rose-600' : 'text-slate-600'}`}>{bill.overdueDays}</td>
+                  <td className="px-4 py-2">{formatCurrency(bill.totalAmount)}</td>
+                  <td className="px-4 py-2 font-bold">{formatCurrency(bill.balanceDue)}</td>
+                </tr>
+              ))}
+            </Table>
+          )}
         </Card>
       ))}
     </div>
