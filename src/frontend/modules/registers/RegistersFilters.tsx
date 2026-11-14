@@ -1,13 +1,13 @@
 import React from 'react';
 
 interface RegisterFiltersProps {
-  activeRegister: 'sales' | 'purchases' | 'journal';
+  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns';
   startDate: string;
   setStartDate: (v: string) => void;
   endDate: string;
   setEndDate: (v: string) => void;
   accounts: any[];
-  
+
   salesCustomer: string;
   setSalesCustomer: (v: string) => void;
   salesCreditAccount: string;
@@ -17,6 +17,9 @@ interface RegisterFiltersProps {
   setSalesRegisterType: (v: 'summarised' | 'detailed') => void;
   salesType: 'Finish Sales' | 'Grey Sales' | 'all';
   setSalesType: (v: 'Finish Sales' | 'Grey Sales' | 'all') => void;
+
+  salesReturnCustomer: string;
+  setSalesReturnCustomer: (v: string) => void;
 
   purchaseSupplier: string;
   setPurchaseSupplier: (v: string) => void;
@@ -54,6 +57,9 @@ export const RegisterFilters: React.FC<RegisterFiltersProps> = ({
   setSalesRegisterType,
   salesType,
   setSalesType,
+
+  salesReturnCustomer,
+  setSalesReturnCustomer,
 
   purchaseSupplier,
   setPurchaseSupplier,
@@ -197,6 +203,23 @@ export const RegisterFilters: React.FC<RegisterFiltersProps> = ({
               </div>
             </div>
           </>
+        )}
+
+        {/* Sales Return Filters */}
+        {activeRegister === 'sales_returns' && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] uppercase font-bold text-slate-500">Customer Name</label>
+            <select
+              value={salesReturnCustomer}
+              onChange={(e) => setSalesReturnCustomer(e.target.value)}
+              className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-semibold text-slate-800 h-8 text-xs cursor-pointer"
+            >
+              <option value="">-- All Customers --</option>
+              {accounts.filter(p => p.group_name === 'Sundry Debtors').map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
         )}
 
         {/* Purchase Filters */}

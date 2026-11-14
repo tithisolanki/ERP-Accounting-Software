@@ -232,21 +232,6 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
   };
 
   const handleExport = () => {
-    // Sales Return Register exports itself -- exportToCSV's own union type is
-    // sales/purchases/journal only, and widening it is out of this change's scope.
-    if (activeRegister === 'sales_returns') {
-      const headers = ['Date', 'Return No', 'Customer Name', 'Return Type', 'Taxable Val', 'GST Amt', 'Grand Total'];
-      const rows = filteredSalesReturns.map(r => [r.date, r.return_number, r.customer_name, r.return_type || '', r.taxable_value, r.gst_amount, r.total_amount]);
-      const csvContent = [headers.join(','), ...rows.map(r => r.map((val: any) => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.setAttribute('download', `Sales_Return_Register_${startDate}_to_${endDate}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      return;
-    }
     exportToCSV(
       activeRegister,
       startDate,
@@ -255,7 +240,8 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
       salesRegisterType,
       filteredPurchases,
       purchaseRegisterType,
-      filteredJournals
+      filteredJournals,
+      filteredSalesReturns
     );
   };
 
@@ -333,37 +319,7 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
       {/* Main Content Area in Dual-Pane Split screen */}
       <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
 
-        {/* Left Column Pane: Filter Options Sidebar -- Sales Return Register gets its own
-            compact panel (RegisterFilters is typed sales/purchases/journal only) */}
-        {activeRegister === 'sales_returns' ? (
-          <div className="lg:w-[320px] w-full shrink-0 flex flex-col gap-4 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm text-slate-800 font-semibold select-none">
-            <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 pb-2">
-              Filter Parameters
-            </h3>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] uppercase font-bold text-slate-500">Start Date</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs cursor-pointer" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] uppercase font-bold text-slate-500">End Date</label>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-bold text-slate-800 h-8 text-xs cursor-pointer" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] uppercase font-bold text-slate-500">Customer Name</label>
-                <select value={salesReturnCustomer} onChange={(e) => setSalesReturnCustomer(e.target.value)}
-                  className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-semibold text-slate-800 h-8 text-xs cursor-pointer">
-                  <option value="">-- All Customers --</option>
-                  {accounts.filter(p => p.group_name === 'Sundry Debtors').map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        ) : (
+        {/* Left Column Pane: Filter Options Sidebar */}
         <RegisterFilters
           activeRegister={activeRegister}
           startDate={startDate}
@@ -380,6 +336,8 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
           setSalesRegisterType={setSalesRegisterType}
           salesType={salesType}
           setSalesType={setSalesType}
+          salesReturnCustomer={salesReturnCustomer}
+          setSalesReturnCustomer={setSalesReturnCustomer}
           purchaseSupplier={purchaseSupplier}
           setPurchaseSupplier={setPurchaseSupplier}
           purchaseDebitAccount={purchaseDebitAccount}
@@ -397,7 +355,6 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
           setJournalVoucherType={setJournalVoucherType}
           voucherTypes={voucherTypes}
         />
-        )}
 
         {/* Right Column Pane: Live Print Preview Sheet */}
         <div className="flex-1 w-full flex flex-col gap-4">
@@ -439,47 +396,6 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
               <div className="flex-1 flex items-center justify-center py-20 text-slate-400 font-bold text-xs animate-pulse">
                 Generating Register Data...
               </div>
-            ) : activeRegister === 'sales_returns' ? (
-              <>
-                {filteredSalesReturns.length === 0 ? (
-                  <div className="py-20 text-center text-slate-400 italic">No sales returns match the filter criteria.</div>
-                ) : (
-                  <div className="overflow-x-auto w-full">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-400 font-bold text-slate-700">
-                          <th className="py-2 px-3 text-[11px] uppercase">Date</th>
-                          <th className="py-2 px-3 text-[11px] uppercase">Return No</th>
-                          <th className="py-2 px-3 text-[11px] uppercase">Customer Name</th>
-                          <th className="py-2 px-3 text-[11px] uppercase">Return Type</th>
-                          <th className="py-2 px-3 text-[11px] uppercase text-right">Taxable Val</th>
-                          <th className="py-2 px-3 text-[11px] uppercase text-right">GST Amt</th>
-                          <th className="py-2 px-3 text-[11px] uppercase text-right">Grand Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredSalesReturns.map((r) => (
-                          <tr key={r.id} className="border-b border-slate-200/60 hover:bg-slate-50/20 text-slate-800">
-                            <td className="py-2 px-3 font-mono text-[11px]">{formatDateForDisplay(r.date)}</td>
-                            <td className="py-2 px-3 font-mono font-bold text-indigo-650">{r.return_number}</td>
-                            <td className="py-2 px-3 font-bold text-slate-700">{r.customer_name}</td>
-                            <td className="py-2 px-3 text-slate-550 font-semibold">{r.return_type || '-'}</td>
-                            <td className="py-2 px-3 font-mono text-right text-slate-650">{formatCurrency(r.taxable_value)}</td>
-                            <td className="py-2 px-3 font-mono text-right text-slate-650">{formatCurrency(r.gst_amount)}</td>
-                            <td className="py-2 px-3 font-mono font-bold text-right text-slate-850">{formatCurrency(r.total_amount)}</td>
-                          </tr>
-                        ))}
-                        <tr className="border-t-2 border-slate-400 font-bold bg-slate-50/40">
-                          <td colSpan={4} className="py-2 px-3 text-[11px] uppercase text-slate-700 font-black">Grand Totals ({filteredSalesReturns.length} returns)</td>
-                          <td className="py-2 px-3 font-mono text-right text-slate-800">{formatCurrency(salesReturnSummary.taxable)}</td>
-                          <td className="py-2 px-3 font-mono text-right text-slate-800">{formatCurrency(salesReturnSummary.gst)}</td>
-                          <td className="py-2 px-3 font-mono text-right text-indigo-700">{formatCurrency(salesReturnSummary.total)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
             ) : (
               <>
                 <RegisterTable
@@ -489,10 +405,12 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
                   filteredSales={filteredSales}
                   filteredPurchases={filteredPurchases}
                   filteredJournals={filteredJournals}
+                  filteredSalesReturns={filteredSalesReturns}
                   formatDateForDisplay={formatDateForDisplay}
                   formatCurrency={formatCurrency}
                   salesSummary={salesSummary}
                   purchaseSummary={purchaseSummary}
+                  salesReturnSummary={salesReturnSummary}
                 />
 
                 <RegisterSummary
@@ -502,9 +420,11 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
                   filteredSales={filteredSales}
                   filteredPurchases={filteredPurchases}
                   filteredJournals={filteredJournals}
+                  filteredSalesReturns={filteredSalesReturns}
                   salesSummary={salesSummary}
                   purchaseSummary={purchaseSummary}
                   journalSummary={journalSummary}
+                  salesReturnSummary={salesReturnSummary}
                   formatCurrency={formatCurrency}
                 />
               </>
