@@ -49,15 +49,30 @@ export class AccVoucherRepository {
     );
   }
 
+  // A real journal voucher's voucher_type is whatever the user picked from the Journal Voucher
+  // Type Master (e.g. "Salary", "Depreciation") -- there's no fixed literal value to match on.
+  // Excluding these specific labels instead of matching one in is what makes this safe: they're
+  // exactly the AC_PLUS migration's own labels for postings that came from Sales/Purchase bills,
+  // Bank/Cash vouchers, Credit/Debit Notes and Returns, not from the Journal Voucher screen at
+  // all -- dumped into this shared table by whatever process originally migrated this company's
+  // data, well before this session. None of TexFin's own Journal Voucher Type Master entries can
+  // ever collide with these, since they're legacy-migration artifacts, not real master data.
+  private static readonly MIGRATION_ARTIFACT_VOUCHER_TYPES = [
+    'Sales Bill Posting', 'Purchase Bill Posting', 'Bank Payment', 'Bank Receipt',
+    'Cash Payment', 'Cash Receipt', 'Credit Note', 'Debit Note',
+    'Sales Return (GC)', 'Purchase Return (GD)', 'Bank Contra'
+  ];
+
   async findRawJournalVouchers(companyId: string): Promise<any[]> {
     const db = await getDb();
+    const placeholders = AccVoucherRepository.MIGRATION_ARTIFACT_VOUCHER_TYPES.map(() => '?').join(',');
     return db.all(`
       SELECT jv.*, acc.name as account_name
       FROM journal_vouchers jv
       JOIN accounts acc ON jv.account_id = acc.id
-      WHERE jv.company_id = ?
+      WHERE jv.company_id = ? AND jv.voucher_type NOT IN (${placeholders})
       ORDER BY jv.date DESC, jv.updated_at DESC
-    `, [companyId]);
+    `, [companyId, ...AccVoucherRepository.MIGRATION_ARTIFACT_VOUCHER_TYPES]);
   }
 
   async countJournalVouchersByNo(db: any, companyId: string, voucherNo: string): Promise<number> {
