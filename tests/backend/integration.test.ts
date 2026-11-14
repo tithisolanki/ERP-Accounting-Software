@@ -3,6 +3,7 @@ import { reportsService } from '../../src/backend/services/reports.service';
 import { salesService } from '../../src/backend/services/sales.service';
 import { salesReturnService, OverReturnError } from '../../src/backend/services/sales-return.service';
 import { purchaseService } from '../../src/backend/services/purchase.service';
+import { purchaseReturnService } from '../../src/backend/services/purchase-return.service';
 import { accVoucherService } from '../../src/backend/services/accvoucher.service';
 import { accVoucherRepository } from '../../src/backend/repositories/accvoucher.repository';
 import { receiptService } from '../../src/backend/services/cashflow.service';
@@ -858,6 +859,103 @@ async function runTests() {
     const srSaleCBillAfterEdit = billsAfterEdit.find((b: any) => b.billId === srSaleC.id);
     check('Editing a return does not double-count its own prior effect on the bill\'s balanceDue (4200 - 4000 = 200, not 4200 - 500 - 4000 = -300)',
       srSaleCBillAfterEdit?.balanceDue === 200, JSON.stringify(srSaleCBillAfterEdit));
+
+    console.log('\nTest 24: Purchase Return -- itemized, against-bill linkage, over-return warn-and-confirm, account mismatch reject...');
+    const now24 = new Date().toISOString();
+    const returnSupplierId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Return Supplier', 0, 'Sundry Creditors', 0, ?)`, [returnSupplierId, company.id, now24]);
+
+    // Purchase A: used for the basic create / account-mismatch / over-return warn+confirm checks.
+    await purchaseService.createPurchase(company.id, actor, {
+      purchaseNumber: 9701, entryNo: 9701, date: '2026-01-01', supplierId: returnSupplierId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 100, rate: 100, gstPercentage: 5 }]
+    });
+    const prPurchaseA = await db.get('SELECT id, total_amount, date FROM purchases WHERE entry_no = 9701 AND company_id = ?', [company.id]);
+    check('Purchase A total = 10,500', prPurchaseA.total_amount === 10500, `got ${prPurchaseA.total_amount}`);
+
+    const returnOk2 = await purchaseReturnService.createPurchaseReturn(company.id, actor, {
+      returnNumber: 1, date: '2026-03-01', supplierId: returnSupplierId, financialYear: '2025-26',
+      againstPurchaseId: prPurchaseA.id, againstBillDate: prPurchaseA.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+    const billsAfterPrReturn1 = await accVoucherRepository.getOutstandingBills(company.id, returnSupplierId);
+    const prPurchaseABillAfterReturn1 = billsAfterPrReturn1.find((b: any) => b.billId === prPurchaseA.id);
+    check('Purchase Return creates successfully and reduces the bill\'s balanceDue (10500 - 1050 = 9450)',
+      !!returnOk2 && prPurchaseABillAfterReturn1?.balanceDue === 9450, JSON.stringify(prPurchaseABillAfterReturn1));
+
+    check('Account mismatch is rejected outright', await rejects(() => purchaseReturnService.createPurchaseReturn(company.id, actor, {
+      returnNumber: 2, date: '2026-03-02', supplierId: allocSupplierId, financialYear: '2025-26',
+      againstPurchaseId: prPurchaseA.id, againstBillDate: prPurchaseA.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 5, rate: 100, gstPercentage: 5 }]
+    }), 'does not belong'));
+
+    const overPrReturnBody = {
+      returnNumber: 2, date: '2026-03-05', supplierId: returnSupplierId, financialYear: '2025-26',
+      againstPurchaseId: prPurchaseA.id, againstBillDate: prPurchaseA.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 91, rate: 100, gstPercentage: 5 }]
+    };
+    let overPrReturnError: any = null;
+    try {
+      await purchaseReturnService.createPurchaseReturn(company.id, actor, overPrReturnBody);
+    } catch (e) {
+      overPrReturnError = e;
+    }
+    check('Over-return without confirmOverage throws OverReturnError (not a generic Error)',
+      overPrReturnError instanceof OverReturnError && overPrReturnError.balanceDue === 9450 && String(overPrReturnError.message).includes('exceeds'),
+      String(overPrReturnError?.message));
+
+    const confirmedPrReturnId = await purchaseReturnService.createPurchaseReturn(company.id, actor, { ...overPrReturnBody, confirmOverage: true });
+    check('The same over-return with confirmOverage:true saves successfully', !!confirmedPrReturnId);
+
+    // Purchase B: used for the cross-financial-year bill lookup check and the delete-recompute check.
+    await purchaseService.createPurchase(company.id, actor, {
+      purchaseNumber: 9702, entryNo: 9702, date: '2026-01-10', supplierId: returnSupplierId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 50, rate: 100, gstPercentage: 5 }]
+    });
+    const prPurchaseB = await db.get('SELECT id, total_amount, date FROM purchases WHERE entry_no = 9702 AND company_id = ?', [company.id]);
+    check('Purchase B total = 5,250', prPurchaseB.total_amount === 5250, `got ${prPurchaseB.total_amount}`);
+
+    const returnBId2 = await purchaseReturnService.createPurchaseReturn(company.id, actor, {
+      returnNumber: 1, date: '2026-04-05', supplierId: returnSupplierId, financialYear: '2026-27',
+      againstPurchaseId: prPurchaseB.id, againstBillDate: prPurchaseB.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+    const billsAfterCrossFyPrReturn = await accVoucherRepository.getOutstandingBills(company.id, returnSupplierId);
+    const prPurchaseBBill = billsAfterCrossFyPrReturn.find((b: any) => b.billId === prPurchaseB.id);
+    check('A return dated in a different financial year than its bill still finds the bill correctly (5250 - 1050 = 4200)',
+      prPurchaseBBill?.balanceDue === 4200, JSON.stringify(prPurchaseBBill));
+
+    await purchaseReturnService.deletePurchaseReturn(company.id, returnBId2, actor);
+    const billsAfterPrReturnDelete = await accVoucherRepository.getOutstandingBills(company.id, returnSupplierId);
+    const prPurchaseBBillAfterDelete = billsAfterPrReturnDelete.find((b: any) => b.billId === prPurchaseB.id);
+    check('Deleting a return reverts the bill\'s balanceDue to its pre-return amount (back to 5250)',
+      prPurchaseBBillAfterDelete?.balanceDue === 5250, JSON.stringify(prPurchaseBBillAfterDelete));
+
+    // Purchase C: used for the edit-does-not-double-count check (zero GST for clean arithmetic).
+    await purchaseService.createPurchase(company.id, actor, {
+      purchaseNumber: 9703, entryNo: 9703, date: '2026-01-15', supplierId: returnSupplierId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 42, rate: 100, gstPercentage: 0 }]
+    });
+    const prPurchaseC = await db.get('SELECT id, total_amount, date FROM purchases WHERE entry_no = 9703 AND company_id = ?', [company.id]);
+    check('Purchase C total = 4,200', prPurchaseC.total_amount === 4200, `got ${prPurchaseC.total_amount}`);
+
+    const returnCId2 = await purchaseReturnService.createPurchaseReturn(company.id, actor, {
+      returnNumber: 3, date: '2026-03-10', supplierId: returnSupplierId, financialYear: '2025-26',
+      againstPurchaseId: prPurchaseC.id, againstBillDate: prPurchaseC.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 5, rate: 100, gstPercentage: 0 }]
+    });
+    // Edit to a total (4000) that only fits if the update excludes this return's OWN prior 500
+    // from the balance check -- without that exclusion the (buggy) check would see only
+    // 4200 - 500 = 3700 room left and wrongly throw OverReturnError for a 4000 edit.
+    await purchaseReturnService.updatePurchaseReturn(company.id, returnCId2, actor, {
+      returnNumber: 3, date: '2026-03-10', supplierId: returnSupplierId, financialYear: '2025-26',
+      againstPurchaseId: prPurchaseC.id, againstBillDate: prPurchaseC.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 40, rate: 100, gstPercentage: 0 }]
+    });
+    const billsAfterPrEdit = await accVoucherRepository.getOutstandingBills(company.id, returnSupplierId);
+    const prPurchaseCBillAfterEdit = billsAfterPrEdit.find((b: any) => b.billId === prPurchaseC.id);
+    check('Editing a return does not double-count its own prior effect on the bill\'s balanceDue (4200 - 4000 = 200, not 4200 - 500 - 4000 = -300)',
+      prPurchaseCBillAfterEdit?.balanceDue === 200, JSON.stringify(prPurchaseCBillAfterEdit));
 
     await closeDb();
     console.log('\nDatabase closed.');
