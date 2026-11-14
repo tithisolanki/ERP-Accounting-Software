@@ -1,5 +1,6 @@
 import { getDb, initDb, closeDb } from '../../src/backend/db';
 import { reportsService } from '../../src/backend/services/reports.service';
+import { reportsRepository } from '../../src/backend/repositories/reports.repository';
 import { salesService } from '../../src/backend/services/sales.service';
 import { salesReturnService, OverReturnError } from '../../src/backend/services/sales-return.service';
 import { purchaseService } from '../../src/backend/services/purchase.service';
@@ -956,6 +957,78 @@ async function runTests() {
     const prPurchaseCBillAfterEdit = billsAfterPrEdit.find((b: any) => b.billId === prPurchaseC.id);
     check('Editing a return does not double-count its own prior effect on the bill\'s balanceDue (4200 - 4000 = 200, not 4200 - 500 - 4000 = -300)',
       prPurchaseCBillAfterEdit?.balanceDue === 200, JSON.stringify(prPurchaseCBillAfterEdit));
+
+    console.log('\nTest 25: Goods Returns correctly reverse ledger balances, account postings, and GST report figures...');
+
+    // Dedicated sale + return pair, isolated from Tests 23/24's other fixtures, so the
+    // before/after net-balance delta is attributable only to this one new return.
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9604, date: '2026-05-01', customerId: returnCustomerId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 20, rate: 100, gstPercentage: 5 }]
+    });
+    const srSaleD = await db.get('SELECT id, invoice_number, total_amount, taxable_value, gst_amount, date FROM sales WHERE invoice_number = 9604 AND company_id = ?', [company.id]);
+
+    const netBalancesBeforeSalesReturn = await reportsRepository.getAccountNetBalances(company.id);
+    const customerNetBefore = netBalancesBeforeSalesReturn.find((b: any) => b.id === returnCustomerId)?.net_dr ?? 0;
+
+    const returnDId = await salesReturnService.createSalesReturn(company.id, actor, {
+      returnNumber: 10, date: '2026-05-05', customerId: returnCustomerId, financialYear: '2025-26',
+      againstSaleId: srSaleD.id, againstBillDate: srSaleD.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 5, rate: 100, gstPercentage: 5 }]
+    });
+    const srReturnD = await db.get('SELECT id, return_number, total_amount, taxable_value, gst_amount, date FROM sales_returns WHERE id = ?', [returnDId]);
+
+    const netBalancesAfterSalesReturn = await reportsRepository.getAccountNetBalances(company.id);
+    const customerNetAfter = netBalancesAfterSalesReturn.find((b: any) => b.id === returnCustomerId)?.net_dr ?? 0;
+
+    check('A sales return reduces the customer\'s net balance by its own total_amount (credits them)',
+      customerNetBefore - customerNetAfter === srReturnD.total_amount,
+      `before=${customerNetBefore} after=${customerNetAfter} returnTotal=${srReturnD.total_amount}`);
+
+    await purchaseService.createPurchase(company.id, actor, {
+      purchaseNumber: 9704, entryNo: 9704, date: '2026-05-01', supplierId: returnSupplierId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 20, rate: 100, gstPercentage: 5 }]
+    });
+    const prPurchaseD = await db.get('SELECT id, total_amount, taxable_value, gst_amount, date FROM purchases WHERE entry_no = 9704 AND company_id = ?', [company.id]);
+
+    const netBalancesBeforePurchaseReturn = await reportsRepository.getAccountNetBalances(company.id);
+    const supplierNetBefore = netBalancesBeforePurchaseReturn.find((b: any) => b.id === returnSupplierId)?.net_dr ?? 0;
+
+    const returnDId2 = await purchaseReturnService.createPurchaseReturn(company.id, actor, {
+      returnNumber: 10, date: '2026-05-05', supplierId: returnSupplierId, financialYear: '2025-26',
+      againstPurchaseId: prPurchaseD.id, againstBillDate: prPurchaseD.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 5, rate: 100, gstPercentage: 5 }]
+    });
+    const prReturnD = await db.get('SELECT id, return_number, total_amount, taxable_value, gst_amount, date FROM purchase_returns WHERE id = ?', [returnDId2]);
+
+    const netBalancesAfterPurchaseReturn = await reportsRepository.getAccountNetBalances(company.id);
+    const supplierNetAfter = netBalancesAfterPurchaseReturn.find((b: any) => b.id === returnSupplierId)?.net_dr ?? 0;
+
+    check('A purchase return reduces the supplier\'s net balance by its own total_amount (debits them)',
+      supplierNetAfter - supplierNetBefore === prReturnD.total_amount,
+      `before=${supplierNetBefore} after=${supplierNetAfter} returnTotal=${prReturnD.total_amount}`);
+
+    const customerPostings = await reportsRepository.getAccountPostings(company.id, returnCustomerId);
+    const salesReturnPosting = customerPostings.find((p: any) => p.id === returnDId);
+    check('getAccountPostings lists the sales return as its own \'Sales Return\' row with the credit/debit swapped from a normal sale',
+      !!salesReturnPosting && salesReturnPosting.voucherType === 'Sales Return' && salesReturnPosting.debit === 0 && salesReturnPosting.credit === srReturnD.total_amount,
+      JSON.stringify(salesReturnPosting));
+
+    const supplierPostings = await reportsRepository.getAccountPostings(company.id, returnSupplierId);
+    const purchaseReturnPosting = supplierPostings.find((p: any) => p.id === returnDId2);
+    check('getAccountPostings lists the purchase return as its own \'Purchase Return\' row with the credit/debit swapped from a normal purchase',
+      !!purchaseReturnPosting && purchaseReturnPosting.voucherType === 'Purchase Return' && purchaseReturnPosting.credit === 0 && purchaseReturnPosting.debit === prReturnD.total_amount,
+      JSON.stringify(purchaseReturnPosting));
+
+    const gstReport = await reportsService.getGstReport(company.id);
+    const originalInvoiceRow = gstReport.sales.find((s: any) => s.voucherNo === srSaleD.invoice_number && s.taxable > 0);
+    const salesReturnGstRow = gstReport.sales.find((s: any) => s.voucherNo === srReturnD.return_number && s.taxable < 0);
+    check('getGstReport includes the sales return as a separate negative-signed line, not netted into the original invoice\'s row',
+      !!originalInvoiceRow && originalInvoiceRow.taxable === srSaleD.taxable_value && originalInvoiceRow.total === srSaleD.total_amount &&
+      !!salesReturnGstRow && salesReturnGstRow.taxable === -srReturnD.taxable_value && salesReturnGstRow.total === -srReturnD.total_amount &&
+      salesReturnGstRow.cgst === -(srReturnD.gst_amount / 2) && salesReturnGstRow.sgst === -(srReturnD.gst_amount / 2) &&
+      originalInvoiceRow !== salesReturnGstRow,
+      JSON.stringify({ originalInvoiceRow, salesReturnGstRow }));
 
     await closeDb();
     console.log('\nDatabase closed.');

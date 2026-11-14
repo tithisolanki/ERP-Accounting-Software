@@ -248,6 +248,47 @@ export class ReportsService {
       };
     });
 
+    const salesReturnsGst = await reportsRepository.getSalesReturnsGst(companyId);
+    for (const r of salesReturnsGst) {
+      const pState = (r.party_state || '').toLowerCase();
+      const isInterstate = pState && companyState && !companyState.includes(pState) && !pState.includes(companyState);
+      const cgst = isInterstate ? 0 : r.gst_amount / 2;
+      const sgst = isInterstate ? 0 : r.gst_amount / 2;
+      const igst = isInterstate ? r.gst_amount : 0;
+      salesList.push({
+        voucherNo: r.return_number,
+        date: r.date,
+        partyName: r.party_name,
+        gstin: r.gst_number || 'N/A',
+        taxable: -r.taxable_value,
+        cgst: -cgst,
+        sgst: -sgst,
+        igst: -igst,
+        total: -r.total_amount
+      });
+    }
+
+    const purchaseReturnsGst = await reportsRepository.getPurchaseReturnsGst(companyId);
+    for (const r of purchaseReturnsGst) {
+      const pState = (r.party_state || '').toLowerCase();
+      const isInterstate = pState && companyState && !companyState.includes(pState) && !pState.includes(companyState);
+      const cgst = isInterstate ? 0 : r.gst_amount / 2;
+      const sgst = isInterstate ? 0 : r.gst_amount / 2;
+      const igst = isInterstate ? r.gst_amount : 0;
+      purchasesList.push({
+        entryNo: r.return_number,
+        voucherNo: r.return_number,
+        date: r.date,
+        partyName: r.party_name,
+        gstin: r.gst_number || 'N/A',
+        taxable: -r.taxable_value,
+        cgst: -cgst,
+        sgst: -sgst,
+        igst: -igst,
+        total: -r.total_amount
+      });
+    }
+
     return {
       sales: salesList,
       purchases: purchasesList

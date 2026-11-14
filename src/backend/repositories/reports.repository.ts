@@ -107,6 +107,26 @@ export class ReportsRepository {
     `, [companyId]);
   }
 
+  async getSalesReturnsGst(companyId: string): Promise<any[]> {
+    const db = await getDb();
+    return db.all(`
+      SELECT sr.return_number, sr.date, sr.taxable_value, sr.gst_amount, sr.total_amount, p.name as party_name, p.gst_number, p.state as party_state
+      FROM sales_returns sr
+      JOIN accounts p ON sr.customer_id = p.id
+      WHERE sr.company_id = ?
+    `, [companyId]);
+  }
+
+  async getPurchaseReturnsGst(companyId: string): Promise<any[]> {
+    const db = await getDb();
+    return db.all(`
+      SELECT pr.return_number, pr.date, pr.taxable_value, pr.gst_amount, pr.total_amount, p.name as party_name, p.gst_number, p.state as party_state
+      FROM purchase_returns pr
+      JOIN accounts p ON pr.supplier_id = p.id
+      WHERE pr.company_id = ?
+    `, [companyId]);
+  }
+
   async getSalesInvoiceForPdf(salesId: string, companyId: string): Promise<any | null> {
     const db = await getDb();
     return db.get('SELECT * FROM sales WHERE id = ? AND company_id = ?', [salesId, companyId]);
@@ -181,6 +201,8 @@ export class ReportsRepository {
         UNION ALL SELECT account_id, amount, 0 FROM payments WHERE company_id = ?1
         UNION ALL SELECT account_id, 0, amount FROM receipts WHERE company_id = ?1
         UNION ALL SELECT account_id, COALESCE(debit_amount, 0), COALESCE(credit_amount, 0) FROM journal_vouchers WHERE company_id = ?1
+        UNION ALL SELECT customer_id, 0, total_amount FROM sales_returns WHERE company_id = ?1
+        UNION ALL SELECT supplier_id, total_amount, 0 FROM purchase_returns WHERE company_id = ?1
       ),
       totals AS (SELECT id, SUM(dr) AS dr, SUM(cr) AS cr FROM mv GROUP BY id)
       SELECT a.id, pg.name AS primary_group,
@@ -243,6 +265,14 @@ export class ReportsRepository {
                'Journal ' || voucher_no || COALESCE(': ' || NULLIF(particulars, ''), ''),
                COALESCE(debit_amount, 0), COALESCE(credit_amount, 0), 5
           FROM journal_vouchers WHERE company_id = ?1 AND account_id = ?2
+        UNION ALL
+        SELECT id, date, 'Sales Return', CAST(return_number AS TEXT),
+               'Sales Return: ' || return_number, 0, total_amount, 6
+          FROM sales_returns WHERE company_id = ?1 AND customer_id = ?2
+        UNION ALL
+        SELECT id, date, 'Purchase Return', CAST(return_number AS TEXT),
+               'Purchase Return: ' || return_number, total_amount, 0, 7
+          FROM purchase_returns WHERE company_id = ?1 AND supplier_id = ?2
       ) ORDER BY date, ord
     `, [companyId, accountId]);
   }
