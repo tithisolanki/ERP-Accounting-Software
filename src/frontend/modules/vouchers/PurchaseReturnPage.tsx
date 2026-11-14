@@ -10,7 +10,7 @@ import { PieceMetersModal } from './components/PieceMetersModal';
 import { AccountService, LookupService, AccVoucherService, PurchaseReturnService, OverReturnApiError } from '../../services/api';
 import type { OutstandingBill } from '../../services/accvoucher.api';
 import { API_URL } from '../../services/client';
-import { Save, Printer, Trash2, Plus } from 'lucide-react';
+import { Save, Printer, Trash2, Plus, Edit3 } from 'lucide-react';
 
 const formatCurrency = (val: number) => (val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -57,7 +57,8 @@ export const PurchaseReturnPage: React.FC = () => {
   const [bills, setBills] = useState<OutstandingBill[]>([]);
   const [againstPurchaseId, setAgainstPurchaseId] = useState('');
   const [againstBillDate, setAgainstBillDate] = useState('');
-  const [returnType, setReturnType] = useState<'Grey Return' | 'Finish Return'>('Finish Return');
+  const [returnType, setReturnType] = useState<'Grey' | 'Finish'>('Finish');
+  const [editingReturnId, setEditingReturnId] = useState<string | null>(null);
   const [brokerName, setBrokerName] = useState('');
   const [challanNo, setChallanNo] = useState('');
   const [challanDate, setChallanDate] = useState('');
@@ -105,14 +106,16 @@ export const PurchaseReturnPage: React.FC = () => {
 
   useEffect(() => {
     if (!token || !supplierId) { setBills([]); return; }
-    AccVoucherService.getOutstandingBills(supplierId, token)
+    // includeAllEntries: true -- a return's main scenario is against a bill that's already
+    // fully paid off, which the plain getOutstandingBills' HAVING balanceDue > 0.005 would hide.
+    AccVoucherService.getOutstandingBillsForAllocation('creditor', supplierId, token, { includeAllEntries: true })
       .then((rows) => setBills(rows.filter((b) => b.billType === 'purchase')))
       .catch(() => addNotification('error', 'Failed to load outstanding bills.'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, supplierId]);
 
   const getActiveCategoryId = () => {
-    const wantName = returnType === 'Grey Return' ? 'GREY' : 'FINISH';
+    const wantName = returnType === 'Grey' ? 'GREY' : 'FINISH';
     const match = categories.find((c) => c.name === wantName);
     return match ? match.id : '';
   };
@@ -197,12 +200,13 @@ export const PurchaseReturnPage: React.FC = () => {
   };
 
   const handleNew = () => {
+    setEditingReturnId(null);
     setReturnDate(loginDate);
     setSupplierId('');
     setBills([]);
     setAgainstPurchaseId('');
     setAgainstBillDate('');
-    setReturnType('Finish Return');
+    setReturnType('Finish');
     setBrokerName('');
     setChallanNo('');
     setChallanDate('');
@@ -214,6 +218,46 @@ export const PurchaseReturnPage: React.FC = () => {
     setGstSelect(5);
     setCurrentItem(blankItem(5));
     fetchNextNumber();
+  };
+
+  /** Loads a saved return (header + items, both already embedded in the PurchaseReturnService.getAll
+   * row) into the same form state handleNew blanks -- same load-into-form shape VouchersPage's
+   * own loadVoucherIntoForm uses for its voucher types. */
+  const handleEdit = (r: any) => {
+    setEditingReturnId(r.id);
+    setReturnNo(String(r.return_number));
+    setReturnDate(r.date);
+    setSupplierId(r.supplier_id);
+    setAgainstPurchaseId(r.against_purchase_id);
+    setAgainstBillDate(r.against_bill_date);
+    setReturnType(r.return_type === 'Grey' ? 'Grey' : 'Finish');
+    setBrokerName(r.broker_name || '');
+    setChallanNo(r.challan_number ? String(r.challan_number) : '');
+    setChallanDate(r.challan_date || '');
+    setLrNo(r.lr_number || '');
+    setLrDate(r.lr_date || '');
+    setRemark(r.remark || '');
+
+    const mappedItems: GridItem[] = (r.items || []).map((item: any) => ({
+      categoryId: item.category_id,
+      qualityId: item.quality_id,
+      descriptionId: item.description_id,
+      descriptionName: item.description_name || '',
+      hsnId: item.hsn_id,
+      hsnCode: item.hsn_code ? String(item.hsn_code) : '',
+      lotNumber: '',
+      pcs: item.pcs || 0,
+      quantity: item.meters || 0,
+      rate: item.rate,
+      gstPercentage: item.gst_percentage,
+      per: 'Mtr',
+      pieceMeters: ''
+    }));
+    setItems(mappedItems);
+    setEditingIndex(null);
+    const gst = mappedItems[0]?.gstPercentage ?? 5;
+    setGstSelect(gst);
+    setCurrentItem(blankItem(gst));
   };
 
   const buildPayload = (confirmOverage: boolean) => ({
@@ -248,8 +292,13 @@ export const PurchaseReturnPage: React.FC = () => {
   const handleSave = async (confirmOverage = false) => {
     if (!token) return;
     try {
-      await PurchaseReturnService.create(buildPayload(confirmOverage), token);
-      addNotification('success', `Purchase Return No. ${returnNo} saved.`);
+      if (editingReturnId) {
+        await PurchaseReturnService.update(editingReturnId, buildPayload(confirmOverage), token);
+        addNotification('success', `Purchase Return No. ${returnNo} updated.`);
+      } else {
+        await PurchaseReturnService.create(buildPayload(confirmOverage), token);
+        addNotification('success', `Purchase Return No. ${returnNo} saved.`);
+      }
       setOverageBalanceDue(null);
       handleNew();
       reloadReturns();
@@ -344,11 +393,11 @@ export const PurchaseReturnPage: React.FC = () => {
               <span className="font-bold text-slate-500 text-[11px] uppercase tracking-wider mb-1 leading-none">Return Type</span>
               <div className="flex gap-4">
                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input type="radio" name="returnType" checked={returnType === 'Grey Return'} onChange={() => setReturnType('Grey Return')} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
+                  <input type="radio" name="returnType" checked={returnType === 'Grey'} onChange={() => setReturnType('Grey')} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
                   <span className="text-[11px] uppercase tracking-wider font-bold text-slate-700">Grey</span>
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <input type="radio" name="returnType" checked={returnType === 'Finish Return'} onChange={() => setReturnType('Finish Return')} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
+                  <input type="radio" name="returnType" checked={returnType === 'Finish'} onChange={() => setReturnType('Finish')} className="w-3.5 h-3.5 accent-indigo-650 cursor-pointer" />
                   <span className="text-[11px] uppercase tracking-wider font-bold text-slate-700">Finish</span>
                 </label>
               </div>
@@ -421,7 +470,7 @@ export const PurchaseReturnPage: React.FC = () => {
                 <Plus className="w-4 h-4 mr-1.5" /> New
               </Button>
               <Button type="button" variant="primary" onClick={() => handleSave(false)} disabled={!!validationReason} className="font-bold cursor-pointer">
-                <Save className="w-4 h-4 mr-1.5" /> Save Purchase Return
+                <Save className="w-4 h-4 mr-1.5" /> {editingReturnId ? 'Update Purchase Return' : 'Save Purchase Return'}
               </Button>
             </div>
           </div>
@@ -438,6 +487,9 @@ export const PurchaseReturnPage: React.FC = () => {
               <td className="px-4 py-2">{r.return_type}</td>
               <td className="px-4 py-2">{formatCurrency(r.total_amount)}</td>
               <td className="px-4 py-2 text-right">
+                <button onClick={() => handleEdit(r)} title="Edit" className="w-7 h-7 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 inline-flex items-center justify-center cursor-pointer mr-1">
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
                 <button onClick={() => handlePrint(r.id)} title="Print Goods Debit Note" className="w-7 h-7 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 inline-flex items-center justify-center cursor-pointer mr-1">
                   <Printer className="w-3.5 h-3.5" />
                 </button>
