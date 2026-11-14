@@ -72,11 +72,13 @@ export const PrintAllocationPage: React.FC = () => {
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <label className="text-[11px] uppercase font-bold text-slate-500">{label} Accounts</label>
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={() => setSelectedAccountIds(accounts.map((a) => a.id))}
-                  className="text-[11px] font-bold text-indigo-650 hover:underline cursor-pointer">Select All</button>
-                <button type="button" onClick={() => setSelectedAccountIds([])}
-                  className="text-[11px] font-bold text-indigo-650 hover:underline cursor-pointer">Unselect All</button>
+              <div className="flex gap-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setSelectedAccountIds(accounts.map((a) => a.id))}>
+                  Select All
+                </Button>
+                <Button type="button" variant="secondary" size="sm" onClick={() => setSelectedAccountIds([])}>
+                  UnSelect All
+                </Button>
               </div>
             </div>
             <div className="border border-slate-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-slate-100">
