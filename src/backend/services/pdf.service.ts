@@ -906,16 +906,22 @@ export interface AccountAllocationPdfData {
 }
 
 export interface AllocationPrintPdfData {
-  company: { name: string };
+  company: { name: string; address?: string | null };
   side: 'debtor' | 'creditor';
   accounts: AccountAllocationPdfData[];
   startDate: string;
   endDate: string;
 }
 
-const ALLOC_ROWS_PER_PAGE = 38;
+const ALLOC_ROWS_PER_PAGE = 32;
 const ALLOC_ROW_HEIGHT = 12;
 const ALLOC_PAGE = [842, 595] as const; // landscape: 10 columns need the width
+const ALLOC_PAGE_MARGIN = 25;
+const ALLOC_PAGE_RIGHT = ALLOC_PAGE[0] - ALLOC_PAGE_MARGIN;
+
+function centeredX(text: string, size: number, font: PDFFont): number {
+  return (ALLOC_PAGE[0] - font.widthOfTextAtSize(text, size)) / 2;
+}
 
 type AllocLineItem =
   | { kind: 'accountHeader'; accountName: string }
@@ -955,17 +961,39 @@ function paginateAllocationPrint(accounts: AccountAllocationPdfData[]): AllocLin
 
 const ALLOC_COLS = { date: 25, voucherLabel: 85, voucherNo: 165, voucherAmount: 235, billDate: 310, billType: 375, billNumber: 435, billAmount: 500, adjustAmount: 590, balanceAfter: 680 };
 
+/** Draws the company letterhead, title + page number, and column header row, matching
+ * AC_PLUS's own printed layout (centered letterhead, "Page No. N" beside the title, a ruled
+ * line under the column headers) as closely as a hand-drawn PDF reasonably can. */
 function drawAllocationPrintPageHeader(
   page: PDFPage, font: PDFFont, boldFont: PDFFont,
-  company: { name: string }, side: 'debtor' | 'creditor', startDate: string, endDate: string
+  company: { name: string; address?: string | null }, side: 'debtor' | 'creditor',
+  startDate: string, endDate: string, pageNo: number
 ): number {
-  page.drawText(sanitizeForPdf(company.name), { x: 25, y: 565, size: 12, font: boldFont });
+  let y = 565;
+  const name = sanitizeForPdf(company.name);
+  page.drawText(name, { x: centeredX(name, 14, boldFont), y, size: 14, font: boldFont });
+  y -= 16;
+
+  if (company.address) {
+    const addressLines = wrapText(sanitizeForPdf(company.address), 700, 8, font);
+    for (const line of addressLines.slice(0, 3)) {
+      page.drawText(line, { x: centeredX(line, 8, font), y, size: 8, font });
+      y -= 11;
+    }
+  }
+
+  y -= 8;
   const title = side === 'debtor'
     ? `RECEIPT ALLOCATION FROM AS ON ${formatDate(startDate)} TO ${formatDate(endDate)}`
     : `PAYMENT ALLOCATION FROM AS ON ${formatDate(startDate)} TO ${formatDate(endDate)}`;
-  page.drawText(title, { x: 25, y: 548, size: 10, font: boldFont });
+  page.drawText(title, { x: ALLOC_PAGE_MARGIN, y, size: 10, font: boldFont });
+  const pageLabel = `Page No.   ${pageNo}`;
+  page.drawText(pageLabel, { x: ALLOC_PAGE_RIGHT - boldFont.widthOfTextAtSize(pageLabel, 9), y, size: 9, font: boldFont });
+  y -= 16;
 
-  let y = 525;
+  page.drawText('Account Name', { x: ALLOC_PAGE_MARGIN, y, size: 8, font });
+  y -= 14;
+
   page.drawText('Date', { x: ALLOC_COLS.date, y, size: 7, font: boldFont });
   page.drawText('Vou.Type', { x: ALLOC_COLS.voucherLabel, y, size: 7, font: boldFont });
   page.drawText('Voucher No.', { x: ALLOC_COLS.voucherNo, y, size: 7, font: boldFont });
@@ -973,9 +1001,11 @@ function drawAllocationPrintPageHeader(
   page.drawText('Bill Date', { x: ALLOC_COLS.billDate, y, size: 7, font: boldFont });
   page.drawText('Type', { x: ALLOC_COLS.billType, y, size: 7, font: boldFont });
   page.drawText('Bill No.', { x: ALLOC_COLS.billNumber, y, size: 7, font: boldFont });
-  page.drawText('Bill Amt.', { x: ALLOC_COLS.billAmount, y, size: 7, font: boldFont });
+  page.drawText('Balance Amt.', { x: ALLOC_COLS.billAmount, y, size: 7, font: boldFont });
   page.drawText('Adjust Amt.', { x: ALLOC_COLS.adjustAmount, y, size: 7, font: boldFont });
   page.drawText('Balance Amt.', { x: ALLOC_COLS.balanceAfter, y, size: 7, font: boldFont });
+  y -= 5;
+  page.drawLine({ start: { x: ALLOC_PAGE_MARGIN, y }, end: { x: ALLOC_PAGE_RIGHT, y }, thickness: 1, color: rgb(0, 0, 0) });
   y -= ALLOC_ROW_HEIGHT;
   return y;
 }
@@ -994,18 +1024,21 @@ export async function generateAllocationPrintPdf(data: AllocationPrintPdfData): 
 
   if (pages.length === 0) {
     const page = pdfDoc.addPage([...ALLOC_PAGE]);
-    drawAllocationPrintPageHeader(page, font, boldFont, data.company, data.side, data.startDate, data.endDate);
-    page.drawText('No allocation activity found for the selected accounts and date range.', { x: 25, y: 480, size: 9, font });
+    drawAllocationPrintPageHeader(page, font, boldFont, data.company, data.side, data.startDate, data.endDate, 1);
+    page.drawText('No allocation activity found for the selected accounts and date range.', { x: ALLOC_PAGE_MARGIN, y: 400, size: 9, font });
     return pdfDoc.save();
   }
 
   pages.forEach((items, pageIndex) => {
     const page = pdfDoc.addPage([...ALLOC_PAGE]);
-    let y = drawAllocationPrintPageHeader(page, font, boldFont, data.company, data.side, data.startDate, data.endDate);
+    let y = drawAllocationPrintPageHeader(page, font, boldFont, data.company, data.side, data.startDate, data.endDate, pageIndex + 1);
+    const rule = (atY: number) => page.drawLine({ start: { x: ALLOC_PAGE_MARGIN, y: atY }, end: { x: ALLOC_PAGE_RIGHT, y: atY }, thickness: 0.5, color: rgb(0, 0, 0) });
 
     for (const item of items) {
       if (item.kind === 'accountHeader') {
-        page.drawText(sanitizeForPdf(item.accountName), { x: 25, y, size: 9, font: boldFont });
+        const name = sanitizeForPdf(item.accountName);
+        page.drawText(name, { x: ALLOC_PAGE_MARGIN, y, size: 9, font: boldFont });
+        page.drawLine({ start: { x: ALLOC_PAGE_MARGIN, y: y - 2 }, end: { x: ALLOC_PAGE_MARGIN + boldFont.widthOfTextAtSize(name, 9), y: y - 2 }, thickness: 0.5, color: rgb(0, 0, 0) });
       } else if (item.kind === 'row') {
         const r = item.row;
         if (r.date) page.drawText(formatDate(r.date), { x: ALLOC_COLS.date, y, size: 7, font });
@@ -1019,14 +1052,17 @@ export async function generateAllocationPrintPdf(data: AllocationPrintPdfData): 
         page.drawText(r.adjustAmount.toFixed(2), { x: ALLOC_COLS.adjustAmount, y, size: 7, font });
         page.drawText(r.balanceAfter.toFixed(2), { x: ALLOC_COLS.balanceAfter, y, size: 7, font: boldFont });
       } else {
+        rule(y + 6);
         page.drawText(item.subtotal.voucherTotal.toFixed(2), { x: ALLOC_COLS.voucherAmount, y, size: 7, font: boldFont });
         page.drawText(item.subtotal.billTotal.toFixed(2), { x: ALLOC_COLS.billAmount, y, size: 7, font: boldFont });
         page.drawText(item.subtotal.adjustTotal.toFixed(2), { x: ALLOC_COLS.adjustAmount, y, size: 7, font: boldFont });
+        rule(y - 4);
       }
       y -= ALLOC_ROW_HEIGHT;
     }
 
-    page.drawText(`Page ${pageIndex + 1} of ${pages.length}`, { x: 750, y: 20, size: 8, font });
+    const footer = `Page ${pageIndex + 1} of ${pages.length}`;
+    page.drawText(footer, { x: ALLOC_PAGE_RIGHT - font.widthOfTextAtSize(footer, 8), y: 20, size: 8, font });
   });
 
   return pdfDoc.save();
