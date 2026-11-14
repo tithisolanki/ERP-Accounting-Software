@@ -18,7 +18,7 @@ export const PrintAllocationPage: React.FC = () => {
   const fyStartYear = (financialYear || '').split('-')[0] || new Date().getFullYear().toString();
   const defaultStartDate = `${fyStartYear}-04-01`;
 
-  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
+  const [allAccounts, setAllAccounts] = useState<{ id: string; name: string; group_name?: string | null }[]>([]);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(defaultStartDate);
   const [endDate, setEndDate] = useState(loginDate);
@@ -26,8 +26,12 @@ export const PrintAllocationPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    AccountService.getAll(token).then(setAccounts).catch(() => addNotification('error', 'Failed to load accounts.'));
+    AccountService.getAll(token).then(setAllAccounts).catch(() => addNotification('error', 'Failed to load accounts.'));
   }, [token]);
+
+  // Only Sundry Debtors/Creditors accounts apply here -- picking the wrong side's account
+  // (e.g. a supplier while on Sales) silently returns zero rows, not an error.
+  const accounts = allAccounts.filter((a) => a.group_name === (side === 'debtor' ? 'Sundry Debtors' : 'Sundry Creditors'));
 
   const toggleAccount = (id: string) => {
     setSelectedAccountIds((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
