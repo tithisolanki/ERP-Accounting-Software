@@ -379,7 +379,7 @@ export class AccVoucherService {
     });
 
     return generateAllocationPrintPdf({
-      company: { name: company?.name || 'TexFin Vendor' },
+      company: { name: company?.name || 'TexFin Vendor', address: company?.address },
       side, accounts: accountPages, startDate, endDate
     });
   }
