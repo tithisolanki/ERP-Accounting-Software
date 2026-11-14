@@ -319,6 +319,50 @@ async function ensureSchemaUpdates(db: any) {
   } catch (e) {
     console.error("Failed to create bill allocation tables:", e);
   }
+
+  // 13. Allocation Entry (R20): adjusts old dues/on-account amounts/kasar against specific bills
+  // without a real receipt or payment voucher (voucher.sql CREATE TABLE IF NOT EXISTS also
+  // covers a fresh DB, this mirrors that for existing installs, same as step 12 above).
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS allocation_entries (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        side TEXT NOT NULL,
+        entry_no TEXT NOT NULL,
+        date TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        entry_type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        kasar_account_id TEXT,
+        notes TEXT,
+        is_dirty INTEGER DEFAULT 1,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+        FOREIGN KEY(kasar_account_id) REFERENCES accounts(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE IF NOT EXISTS allocation_entry_bills (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL,
+        allocation_entry_id TEXT NOT NULL,
+        bill_id TEXT NOT NULL,
+        bill_type TEXT NOT NULL,
+        amount_applied REAL DEFAULT 0,
+        discount_amount REAL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        FOREIGN KEY(allocation_entry_id) REFERENCES allocation_entries(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_allocation_entries_account ON allocation_entries(account_id);
+      CREATE INDEX IF NOT EXISTS idx_allocation_entries_lookup ON allocation_entries(company_id, side, entry_no);
+      CREATE INDEX IF NOT EXISTS idx_allocation_entry_bills_entry ON allocation_entry_bills(allocation_entry_id);
+      CREATE INDEX IF NOT EXISTS idx_allocation_entry_bills_bill ON allocation_entry_bills(bill_id);
+    `);
+    console.log("Ensured allocation_entries and allocation_entry_bills tables exist.");
+  } catch (e) {
+    console.error("Failed to create allocation entry tables:", e);
+  }
 }
 
 export async function initDb() {

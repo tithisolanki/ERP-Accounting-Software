@@ -34,5 +34,32 @@ export const AccVoucherService = {
 
   async deleteBank(type: 'payment' | 'receipt', id: string, token: string): Promise<void> {
     await apiFetch(`/api/accvoucher/${type}/${id}`, token, { method: 'DELETE' });
+  },
+
+  async getOutstandingBillsForAllocation(
+    side: 'debtor' | 'creditor', accountId: string, token: string,
+    options: { includeAllEntries?: boolean; excludeEntryNo?: string } = {}
+  ): Promise<OutstandingBill[]> {
+    const params = new URLSearchParams();
+    if (options.includeAllEntries) params.set('includeAllEntries', 'true');
+    if (options.excludeEntryNo) params.set('excludeEntryNo', options.excludeEntryNo);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiFetch(`/api/accvoucher/allocation/${side}/outstanding/${accountId}${query}`, token);
+  },
+
+  async getAllocationEntries(side: 'debtor' | 'creditor', token: string): Promise<any[]> {
+    return apiFetch(`/api/accvoucher/allocation/${side}`, token);
+  },
+
+  async getAllocationEntryDetail(side: 'debtor' | 'creditor', entryNo: string, token: string): Promise<{ header: any; bills: any[] }> {
+    return apiFetch(`/api/accvoucher/allocation/${side}/entry/${entryNo}`, token);
+  },
+
+  async saveAllocationEntry(payload: unknown, token: string): Promise<unknown> {
+    return apiFetch('/api/accvoucher/allocation', token, { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  async deleteAllocationEntry(side: 'debtor' | 'creditor', entryNo: string, token: string): Promise<void> {
+    await apiFetch(`/api/accvoucher/allocation/${side}/${entryNo}`, token, { method: 'DELETE' });
   }
 };

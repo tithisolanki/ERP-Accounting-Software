@@ -251,6 +251,137 @@ export class AccVoucherService {
     return voucherNo;
   }
 
+  // ---- Allocation Entry (R20): adjusts old dues/on-account amounts/kasar against specific
+  // bills without a real receipt/payment voucher (AC_PLUS's Debtors/Creditors Allocation-
+  // Adjustment Entry, confirmed debtor AND creditor sides both exist, unlike R6/R19). ----
+
+  /** Bills for the Allocation Entry picker: sale bills for a debtor entry, purchase bills for a creditor one. */
+  async getOutstandingBillsForAllocation(
+    companyId: string, accountId: string, side: 'debtor' | 'creditor',
+    options: { includeAllEntries?: boolean; excludeEntryNo?: string } = {}
+  ): Promise<any[]> {
+    let excludeAllocationEntryIds: string[] = [];
+    if (options.excludeEntryNo) {
+      const existing = await accVoucherRepository.findAllocationEntryByNo(companyId, side, options.excludeEntryNo);
+      if (existing) excludeAllocationEntryIds = [existing.id];
+    }
+    return accVoucherRepository.getOutstandingBills(companyId, accountId, [], {
+      billType: side === 'debtor' ? 'sale' : 'purchase',
+      includeAllEntries: options.includeAllEntries,
+      excludeAllocationEntryIds
+    });
+  }
+
+  async getAllocationEntries(companyId: string, side: 'debtor' | 'creditor'): Promise<any[]> {
+    return accVoucherRepository.getAllocationEntries(companyId, side);
+  }
+
+  async getAllocationEntryDetail(companyId: string, side: 'debtor' | 'creditor', entryNo: string): Promise<{ header: any; bills: any[] } | null> {
+    return accVoucherRepository.getAllocationEntryDetail(companyId, side, entryNo);
+  }
+
+  async saveAllocationEntry(companyId: string, user: { id: string; username: string }, body: any): Promise<string> {
+    const { side, entryNo, date, accountId, entryType, amount, kasarAccountId, notes, bills, isNew } = body;
+
+    if (side !== 'debtor' && side !== 'creditor') {
+      throw new Error('Invalid side: must be debtor or creditor.');
+    }
+    if (entryType !== 'on_account' && entryType !== 'kasar') {
+      throw new Error('Invalid entry type: must be on_account or kasar.');
+    }
+    if (!date || !entryNo || !accountId) {
+      throw new Error('Missing required allocation entry header fields.');
+    }
+    if (!(Number(amount) > 0)) {
+      throw new Error('Amount must be positive.');
+    }
+    if (entryType === 'kasar' && !kasarAccountId) {
+      throw new Error('A Kasar/Discount account is required for a kasar entry.');
+    }
+    if (!bills || !Array.isArray(bills) || bills.length === 0) {
+      throw new Error('At least one bill must be selected.');
+    }
+
+    const expectedBillType = side === 'debtor' ? 'sale' : 'purchase';
+    let billTotal = 0;
+    for (const bill of bills) {
+      if (!bill.billId || bill.billType !== expectedBillType || !(Number(bill.amount) > 0)) {
+        throw new Error('Invalid bill line detected.');
+      }
+      billTotal += Number(bill.amount);
+    }
+    if (Math.abs(billTotal - Number(amount)) > 0.01) {
+      throw new Error(`Bill lines total ${billTotal.toFixed(2)} must equal the entry amount ${Number(amount).toFixed(2)}.`);
+    }
+
+    await withTransaction(async (db) => {
+      if (isNew && await accVoucherRepository.findAllocationEntryByNo(companyId, side, entryNo)) {
+        throw new Error(`Allocation Entry No. ${entryNo} already exists. Open it to edit, or use a new number.`);
+      }
+      await accVoucherRepository.deleteAllocationEntryByNo(db, companyId, side, entryNo);
+      if (entryType === 'kasar') {
+        await accVoucherRepository.deleteJournalVouchersByNo(db, companyId, `ALLOC-${side === 'debtor' ? 'D' : 'C'}-${entryNo}`);
+      }
+
+      const now = new Date().toISOString();
+      const allocationEntryId = crypto.randomUUID();
+      await accVoucherRepository.createAllocationEntry(db, {
+        id: allocationEntryId, companyId, side, entryNo, date, accountId, entryType,
+        amount: Number(amount), kasarAccountId: entryType === 'kasar' ? kasarAccountId : null,
+        notes: notes || '', now
+      });
+
+      for (const bill of bills) {
+        await accVoucherRepository.createAllocationEntryBill(db, {
+          id: crypto.randomUUID(), companyId, allocationEntryId, billId: bill.billId, billType: bill.billType,
+          amountApplied: entryType === 'on_account' ? Number(bill.amount) : 0,
+          discountAmount: entryType === 'kasar' ? Number(bill.amount) : 0,
+          now
+        });
+      }
+
+      // A kasar write-off is real money forgiven, not just bill bookkeeping: post it to the
+      // general ledger the same way a Journal Voucher would (debit the chosen Kasar/Discount
+      // account, credit the party) -- matching AC_PLUS's own confirmed JV-shaped posting for
+      // this case. An on_account entry only reallocates an already-posted balance, so it
+      // posts nothing new.
+      if (entryType === 'kasar') {
+        const voucherNo = `ALLOC-${side === 'debtor' ? 'D' : 'C'}-${entryNo}`;
+        const particulars = `Kasar against Allocation Entry No. ${entryNo}`;
+        await accVoucherRepository.createJournalVoucherLine(db, {
+          id: crypto.randomUUID(), companyId, voucherNo, date, voucherType: 'Allocation Entry (Kasar)',
+          accountId: kasarAccountId, debitAmount: Number(amount), creditAmount: 0, particulars, now
+        });
+        await accVoucherRepository.createJournalVoucherLine(db, {
+          id: crypto.randomUUID(), companyId, voucherNo, date, voucherType: 'Allocation Entry (Kasar)',
+          accountId, debitAmount: 0, creditAmount: Number(amount), particulars, now
+        });
+      }
+    });
+
+    await auditService.log(
+      companyId, user.id, user.username,
+      `${side === 'debtor' ? 'Debtors' : 'Creditors'} Allocation Entry Saved`,
+      `Saved/Updated Allocation Entry No. ${entryNo} (${entryType}), amount ${amount}, ${bills.length} bill(s).`
+    );
+
+    return entryNo;
+  }
+
+  async deleteAllocationEntry(companyId: string, user: { id: string; username: string }, side: 'debtor' | 'creditor', entryNo: string): Promise<void> {
+    await withTransaction(async (db) => {
+      const existing = await accVoucherRepository.findAllocationEntryByNo(companyId, side, entryNo);
+      if (!existing) throw new Error(`Allocation Entry No. ${entryNo} not found.`);
+      await accVoucherRepository.deleteAllocationEntryByNo(db, companyId, side, entryNo);
+      await accVoucherRepository.deleteJournalVouchersByNo(db, companyId, `ALLOC-${side === 'debtor' ? 'D' : 'C'}-${entryNo}`);
+    });
+    await auditService.log(
+      companyId, user.id, user.username,
+      `${side === 'debtor' ? 'Debtors' : 'Creditors'} Allocation Entry Deleted`,
+      `Deleted Allocation Entry No. ${entryNo}`
+    );
+  }
+
   async deleteVoucher(companyId: string, user: { id: string; username: string }, type: 'payment' | 'receipt' | 'journal', voucherNo: string): Promise<void> {
     if (type !== 'payment' && type !== 'receipt' && type !== 'journal') {
       throw new Error('Invalid transaction type.');

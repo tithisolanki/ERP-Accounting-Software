@@ -222,6 +222,45 @@ CREATE TABLE IF NOT EXISTS payment_allocations (
   FOREIGN KEY(purchase_id) REFERENCES purchases(id) ON DELETE RESTRICT
 );
 
+-- Allocation Entry (R20): adjusts old dues / on-account amounts / kasar against specific bills
+-- without a real receipt or payment voucher -- AC_PLUS's ADEBALOCENTRY/ACREALOCENTRY screens.
+-- Kept as its own table rather than widening receipt_allocations/payment_allocations' NOT NULL
+-- receipt_id/payment_id: SQLite can't relax a NOT NULL column without rebuilding the table,
+-- unsafe against an already-populated install. Bill-balance queries that join
+-- receipt_allocations/payment_allocations also join this table so a bill's balance stays correct.
+CREATE TABLE IF NOT EXISTS allocation_entries (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  side TEXT NOT NULL, -- 'debtor' or 'creditor'
+  entry_no TEXT NOT NULL,
+  date TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  entry_type TEXT NOT NULL, -- 'on_account' or 'kasar'
+  amount REAL NOT NULL,
+  kasar_account_id TEXT,
+  notes TEXT,
+  is_dirty INTEGER DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+  FOREIGN KEY(kasar_account_id) REFERENCES accounts(id) ON DELETE RESTRICT
+);
+
+-- One row per bill a given allocation entry adjusts: amount_applied for 'on_account' entries,
+-- discount_amount for 'kasar' entries -- same amount/discount split as receipt_allocations.
+CREATE TABLE IF NOT EXISTS allocation_entry_bills (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL,
+  allocation_entry_id TEXT NOT NULL,
+  bill_id TEXT NOT NULL,
+  bill_type TEXT NOT NULL, -- 'sale' or 'purchase'
+  amount_applied REAL DEFAULT 0,
+  discount_amount REAL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+  FOREIGN KEY(allocation_entry_id) REFERENCES allocation_entries(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS delivery_challans (
   id TEXT PRIMARY KEY,
   company_id TEXT NOT NULL,
@@ -326,3 +365,7 @@ CREATE INDEX IF NOT EXISTS idx_challans_company ON delivery_challans(company_id)
 CREATE INDEX IF NOT EXISTS idx_challans_lookup ON delivery_challans(company_id, challan_number);
 CREATE INDEX IF NOT EXISTS idx_journal_vouchers_lookup ON journal_vouchers(company_id, voucher_no);
 CREATE INDEX IF NOT EXISTS idx_journal_voucher_types_company ON journal_voucher_types(company_id);
+CREATE INDEX IF NOT EXISTS idx_allocation_entries_account ON allocation_entries(account_id);
+CREATE INDEX IF NOT EXISTS idx_allocation_entries_lookup ON allocation_entries(company_id, side, entry_no);
+CREATE INDEX IF NOT EXISTS idx_allocation_entry_bills_entry ON allocation_entry_bills(allocation_entry_id);
+CREATE INDEX IF NOT EXISTS idx_allocation_entry_bills_bill ON allocation_entry_bills(bill_id);

@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { Login } from '../pages/Login';
 import logo from '../../../assets/logo.png';
 import { Masters } from '../pages/Masters';
-import { Vouchers, BankVouchers, CashVouchers, JournalVouchers } from '../modules/vouchers';
+import { Vouchers, BankVouchers, CashVouchers, JournalVouchers, AllocationEntryPage } from '../modules/vouchers';
 import { Registers } from '../modules/registers';
 import { Settings } from '../pages/Settings';
 import { Modal } from '../components/Modal';
@@ -14,6 +14,7 @@ import {
   searchTargets,
   navItems,
   voucherSidebarItems,
+  allocationEntrySidebarItems,
   accountVoucherItems,
   registerSidebarItems,
   reportsSidebarItems,
@@ -243,6 +244,10 @@ export const App: React.FC = () => {
         return <JournalVouchers />;
       case 'close_financial_year':
         return <CloseFinancialYearPage />;
+      case 'sales_allocation':
+        return <AllocationEntryPage side="debtor" />;
+      case 'purchase_allocation':
+        return <AllocationEntryPage side="creditor" />;
       case 'backup':
         return <BackupRestore />;
       case 'registers':
@@ -327,7 +332,7 @@ export const App: React.FC = () => {
               key={item.id}
               onClick={() => handleTabSwitch(item.id)}
               className={`px-3 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'close_financial_year'))
+                activeTab === item.id || (item.id === 'vouchers' && (activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'close_financial_year' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation'))
                   ? 'bg-slate-100/80 text-indigo-650 font-extrabold border border-slate-200/50 shadow-inner' 
                   : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50'
               }`}
@@ -523,7 +528,7 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'journal_voucher' || activeTab === 'close_financial_year' || activeTab === 'account_opening' || activeTab === 'stock_opening') && (
+            {(activeTab === 'vouchers' || activeTab === 'bank_payment' || activeTab === 'bank_receipt' || activeTab === 'cash_payment' || activeTab === 'cash_receipt' || activeTab === 'journal_voucher' || activeTab === 'close_financial_year' || activeTab === 'account_opening' || activeTab === 'stock_opening' || activeTab === 'sales_allocation' || activeTab === 'purchase_allocation') && (
               <div>
                 <div className="flex items-center gap-2 px-3 py-3 rounded-xl bg-indigo-50 text-indigo-700 font-bold mb-3.5 text-xs shadow-sm">
                   <FileText className="w-4 h-4 shrink-0" />
@@ -546,6 +551,20 @@ export const App: React.FC = () => {
 
                 <SidebarGroup title="Account Vouchers" defaultOpen={accountVoucherItems.some(i => i.id === activeTab)}>
                   {accountVoucherItems.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleTabSwitch(item.id as any)}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold transition-all text-left cursor-pointer ${activeTab === item.id ? 'bg-indigo-50/50 text-indigo-650 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full ${activeTab === item.id ? 'bg-indigo-600' : 'bg-slate-300'}`} />
+                      <span>{item.name}</span>
+                    </button>
+                  ))}
+                </SidebarGroup>
+
+                <SidebarGroup title="Allocation Entries" defaultOpen={allocationEntrySidebarItems.some(i => i.id === activeTab)}>
+                  {allocationEntrySidebarItems.map(item => (
                     <button
                       key={item.id}
                       type="button"

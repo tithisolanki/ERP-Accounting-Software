@@ -64,6 +64,14 @@ export const voucherSidebarItems = [
   { id: 'purchase', name: 'Purchase Voucher' }
 ];
 
+// AC_PLUS files these as direct siblings of Sales Bill / Purchase Bill under Data Entry --
+// "Allocation Entry" + "Print Allocation" (confirmed via its menu resource strings:
+// MnuDebAlocEntry/MnuCreAlocEntry), not nested under any extra "Allocations" submenu.
+export const allocationEntrySidebarItems = [
+  { id: 'sales_allocation', name: 'Sales Allocation Entry' },
+  { id: 'purchase_allocation', name: 'Purchase Allocation Entry' }
+];
+
 export const accountVoucherItems = [
   { id: 'bank_payment', name: 'Bank Payment' },
   { id: 'bank_receipt', name: 'Bank Receipt' },

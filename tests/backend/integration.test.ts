@@ -1,6 +1,7 @@
 import { getDb, initDb, closeDb } from '../../src/backend/db';
 import { reportsService } from '../../src/backend/services/reports.service';
 import { salesService } from '../../src/backend/services/sales.service';
+import { purchaseService } from '../../src/backend/services/purchase.service';
 import { accVoucherService } from '../../src/backend/services/accvoucher.service';
 import { accVoucherRepository } from '../../src/backend/repositories/accvoucher.repository';
 import { receiptService } from '../../src/backend/services/cashflow.service';
@@ -601,6 +602,113 @@ async function runTests() {
     const billNullCreditDays = splitWithNull.find((b: any) => b.billNumber === 9406);
     check('NULL credit_days gives a due date equal to the bill\'s own date, not a crash or null',
       billNullCreditDays?.dueDate === '2026-01-01', JSON.stringify(billNullCreditDays));
+
+    console.log('\nTest 21: Allocation Entry (R20) adjusts old dues/on-account amounts/kasar against specific bills without a receipt/payment voucher, debtor and creditor sides, kasar posts a real journal entry...');
+    const now21 = new Date().toISOString();
+    const allocCustomerId = crypto.randomUUID();
+    const kasarAccountId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Allocation Customer', 0, 'Sundry Debtors', 0, ?)`, [allocCustomerId, company.id, now21]);
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Kasar Allowed', 0, 'Indirect Expenses', 0, ?)`, [kasarAccountId, company.id, now21]);
+
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9501, date: '2026-01-01', customerId: allocCustomerId, financialYear: '2025-26', creditDays: 30,
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 100, rate: 100, gstPercentage: 5 }]
+    });
+    const allocSaleA = await db.get('SELECT id, total_amount FROM sales WHERE invoice_number = 9501 AND company_id = ?', [company.id]);
+
+    // on_account: reallocates an existing credit against the bill -- no new GL posting.
+    await accVoucherService.saveAllocationEntry(company.id, actor, {
+      side: 'debtor', entryNo: 'ALLOC-OA-1', date: '2026-02-01', accountId: allocCustomerId,
+      entryType: 'on_account', amount: 400, isNew: true,
+      bills: [{ billId: allocSaleA.id, billType: 'sale', amount: 400 }]
+    });
+    const afterOnAccount = await accVoucherRepository.getOutstandingBills(company.id, allocCustomerId);
+    const billAfterOnAccount = afterOnAccount.find((b: any) => b.billId === allocSaleA.id);
+    check('on_account entry reduces the bill\'s balanceDue (10500 - 400 = 10100)',
+      billAfterOnAccount?.balanceDue === 10100, JSON.stringify(billAfterOnAccount));
+    const journalAfterOnAccount = await db.all('SELECT * FROM journal_vouchers WHERE company_id = ? AND voucher_no = ?', [company.id, 'ALLOC-D-ALLOC-OA-1']);
+    check('on_account entry posts nothing to the general ledger -- it only reallocates an already-posted balance',
+      journalAfterOnAccount.length === 0, JSON.stringify(journalAfterOnAccount));
+
+    // kasar: writes off part of the bill -- must ALSO post a balanced debit/credit journal pair,
+    // matching AC_PLUS's own confirmed JV-shaped posting for a kasar write-off.
+    await accVoucherService.saveAllocationEntry(company.id, actor, {
+      side: 'debtor', entryNo: 'ALLOC-KS-1', date: '2026-02-05', accountId: allocCustomerId,
+      entryType: 'kasar', amount: 100, kasarAccountId, isNew: true,
+      bills: [{ billId: allocSaleA.id, billType: 'sale', amount: 100 }]
+    });
+    const afterKasar = await accVoucherRepository.getOutstandingBills(company.id, allocCustomerId);
+    const billAfterKasar = afterKasar.find((b: any) => b.billId === allocSaleA.id);
+    check('kasar entry further reduces the bill\'s balanceDue (10100 - 100 = 10000)',
+      billAfterKasar?.balanceDue === 10000, JSON.stringify(billAfterKasar));
+    const journalAfterKasar = await db.all('SELECT * FROM journal_vouchers WHERE company_id = ? AND voucher_no = ?', [company.id, 'ALLOC-D-ALLOC-KS-1']);
+    const kasarDebitLine = journalAfterKasar.find((l: any) => l.account_id === kasarAccountId);
+    const kasarCreditLine = journalAfterKasar.find((l: any) => l.account_id === allocCustomerId);
+    check('kasar entry posts exactly 2 balanced journal lines: debit the Kasar account, credit the customer',
+      journalAfterKasar.length === 2 && kasarDebitLine?.debit_amount === 100 && kasarDebitLine?.credit_amount === 0
+        && kasarCreditLine?.credit_amount === 100 && kasarCreditLine?.debit_amount === 0,
+      JSON.stringify(journalAfterKasar));
+
+    // "Include All Entries": a bill fully settled by an allocation entry is hidden by default,
+    // but still shows up when requested (same pattern as R6's Including Paid Bills).
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9502, date: '2026-01-01', customerId: allocCustomerId, financialYear: '2025-26', creditDays: 30,
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+    const allocSaleB = await db.get('SELECT id, total_amount FROM sales WHERE invoice_number = 9502 AND company_id = ?', [company.id]);
+    await accVoucherService.saveAllocationEntry(company.id, actor, {
+      side: 'debtor', entryNo: 'ALLOC-OA-2', date: '2026-02-01', accountId: allocCustomerId,
+      entryType: 'on_account', amount: allocSaleB.total_amount, isNew: true,
+      bills: [{ billId: allocSaleB.id, billType: 'sale', amount: allocSaleB.total_amount }]
+    });
+    const defaultPicker = await accVoucherService.getOutstandingBillsForAllocation(company.id, allocCustomerId, 'debtor');
+    const includeAllEntries = await accVoucherService.getOutstandingBillsForAllocation(company.id, allocCustomerId, 'debtor', { includeAllEntries: true });
+    check('Allocation Entry picker hides a fully-settled bill by default',
+      !defaultPicker.some((b: any) => b.billId === allocSaleB.id), JSON.stringify(defaultPicker));
+    check('"Include All Entries" still returns the bill once it is fully settled',
+      includeAllEntries.some((b: any) => b.billId === allocSaleB.id), JSON.stringify(includeAllEntries));
+
+    // Validation: bill lines must sum to the header amount.
+    check('Allocation entry rejects when bill lines don\'t sum to the header amount',
+      await rejects(() => accVoucherService.saveAllocationEntry(company.id, actor, {
+        side: 'debtor', entryNo: 'ALLOC-BAD-1', date: '2026-02-10', accountId: allocCustomerId,
+        entryType: 'on_account', amount: 500, isNew: true,
+        bills: [{ billId: allocSaleA.id, billType: 'sale', amount: 400 }]
+      }), 'Bill lines total'));
+
+    // Validation: a kasar entry without a Kasar/Discount account is rejected.
+    check('Allocation entry rejects a kasar entry with no kasarAccountId',
+      await rejects(() => accVoucherService.saveAllocationEntry(company.id, actor, {
+        side: 'debtor', entryNo: 'ALLOC-BAD-2', date: '2026-02-10', accountId: allocCustomerId,
+        entryType: 'kasar', amount: 50, isNew: true,
+        bills: [{ billId: allocSaleA.id, billType: 'sale', amount: 50 }]
+      }), 'Kasar/Discount account is required'));
+
+    // Creditor side: the same mechanism, mirrored onto a purchase bill.
+    const allocSupplierId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Allocation Supplier', 0, 'Sundry Creditors', 0, ?)`, [allocSupplierId, company.id, now21]);
+    await purchaseService.createPurchase(company.id, actor, {
+      purchaseNumber: '9601', entryNo: '9601', date: '2026-01-01', supplierId: allocSupplierId, financialYear: '2025-26', creditDays: 30,
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 50, rate: 100, gstPercentage: 5 }]
+    });
+    const allocPurchaseA = await db.get('SELECT id, total_amount FROM purchases WHERE purchase_number = ? AND company_id = ?', ['9601', company.id]);
+    await accVoucherService.saveAllocationEntry(company.id, actor, {
+      side: 'creditor', entryNo: 'ALLOC-C-OA-1', date: '2026-02-01', accountId: allocSupplierId,
+      entryType: 'on_account', amount: 250, isNew: true,
+      bills: [{ billId: allocPurchaseA.id, billType: 'purchase', amount: 250 }]
+    });
+    const creditorBills = await accVoucherRepository.getOutstandingBills(company.id, allocSupplierId);
+    const billAfterCreditorAlloc = creditorBills.find((b: any) => b.billId === allocPurchaseA.id);
+    check('Creditor-side allocation entry reduces the purchase bill\'s balanceDue the same way (5250 - 250 = 5000)',
+      billAfterCreditorAlloc?.balanceDue === 5000, JSON.stringify(billAfterCreditorAlloc));
+
+    // Validation: a creditor-side entry can only touch purchase bills, not a sale bill.
+    check('A creditor-side allocation entry rejects a sale-type bill line',
+      await rejects(() => accVoucherService.saveAllocationEntry(company.id, actor, {
+        side: 'creditor', entryNo: 'ALLOC-BAD-3', date: '2026-02-10', accountId: allocSupplierId,
+        entryType: 'on_account', amount: 50, isNew: true,
+        bills: [{ billId: allocSaleA.id, billType: 'sale', amount: 50 }]
+      }), 'Invalid bill line'));
 
     await closeDb();
     console.log('\nDatabase closed.');
