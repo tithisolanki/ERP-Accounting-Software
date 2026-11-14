@@ -146,7 +146,7 @@ function formatDate(dateStr: string): string {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
-export async function generateInvoicePdf(data: InvoiceData, copies: string[]): Promise<Uint8Array> {
+export async function generateInvoicePdf(data: InvoiceData, copies: string[], title: string = 'TAX INVOICE'): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -171,7 +171,7 @@ export async function generateInvoicePdf(data: InvoiceData, copies: string[]): P
     page.drawText('SUBJECT TO MUMBAI JURISDICTION', { x: 228, y: 815, size: 7, font: boldFont });
     page.drawText(`email:kchandrakantmumbai@gmail.com`, { x: 440, y: 815, size: 7, font: boldFont });
     
-    page.drawText('TAX INVOICE', { x: 260, y: 802, size: 12, font: boldFont });
+    page.drawText(title, { x: 297.5 - boldFont.widthOfTextAtSize(title, 12) / 2, y: 802, size: 12, font: boldFont });
     page.drawText('(Under Section-31 of Goods and Service Tax Act-2017)', { x: 180, y: 792, size: 8, font: font });
     
     const copyTitleText = copyTitles[copyKey] || copyKey.toUpperCase();
@@ -467,6 +467,64 @@ export async function generateInvoicePdf(data: InvoiceData, copies: string[]): P
 
   const pdfBytes = await pdfDoc.save();
   return pdfBytes;
+}
+
+export interface SalesReturnPdfData {
+  company: InvoiceData['company'];
+  customer: InvoiceData['customer'];
+  return_number: string;
+  date: string;
+  financial_year: string;
+  taxable_value: number;
+  gst_amount: number;
+  total_amount: number;
+  challan_number: string;
+  challan_date: string;
+  broker_name: string;
+  lr_number: string;
+  lr_date: string;
+  remark: string;
+  items: InvoiceData['items'];
+}
+
+/**
+ * Goods Credit Note (R3): reuses generateInvoicePdf's layout (same box/table drawing, just a
+ * different title), since a Sales Return has no credit-days/bale/order/vehicle/freight fields
+ * a Sales Invoice does -- those are zeroed out rather than given their own drawing code.
+ */
+export async function generateSalesReturnPdf(data: SalesReturnPdfData, copies: string[]): Promise<Uint8Array> {
+  const mapped: InvoiceData = {
+    company: data.company,
+    customer: data.customer,
+    invoice_number: data.return_number,
+    date: data.date,
+    financial_year: data.financial_year,
+    taxable_value: data.taxable_value,
+    gst_amount: data.gst_amount,
+    total_amount: data.total_amount,
+    challan_number: data.challan_number || '',
+    challan_date: data.challan_date || '',
+    credit_days: 0,
+    broker_name: data.broker_name || '',
+    bale_number: '',
+    order_number: '',
+    order_date: '',
+    sales_type: '',
+    lr_number: data.lr_number || '',
+    lr_date: data.lr_date || '',
+    transport: '',
+    delivery_at: '',
+    vehicle_number: '',
+    remark: data.remark || '',
+    credit_account: '',
+    cartage: 0,
+    postage: 0,
+    less: 0,
+    less_add: 0,
+    rounded_off: 0,
+    items: data.items
+  };
+  return generateInvoicePdf(mapped, copies, 'GOODS CREDIT NOTE');
 }
 
 export interface ChallanData {

@@ -4,3 +4,4 @@ export { CashVouchers } from './CashVouchersPage';
 export { JournalVouchers } from './JournalVouchersPage';
 export { AllocationEntryPage } from './AllocationEntryPage';
 export { PrintAllocationPage } from './PrintAllocationPage';
+export { SalesReturnPage } from './SalesReturnPage';
