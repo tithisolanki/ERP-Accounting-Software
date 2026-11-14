@@ -992,6 +992,13 @@ export async function generateAllocationPrintPdf(data: AllocationPrintPdfData): 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+  if (pages.length === 0) {
+    const page = pdfDoc.addPage([...ALLOC_PAGE]);
+    drawAllocationPrintPageHeader(page, font, boldFont, data.company, data.side, data.startDate, data.endDate);
+    page.drawText('No allocation activity found for the selected accounts and date range.', { x: 25, y: 480, size: 9, font });
+    return pdfDoc.save();
+  }
+
   pages.forEach((items, pageIndex) => {
     const page = pdfDoc.addPage([...ALLOC_PAGE]);
     let y = drawAllocationPrintPageHeader(page, font, boldFont, data.company, data.side, data.startDate, data.endDate);

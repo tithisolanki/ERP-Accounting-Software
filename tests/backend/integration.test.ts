@@ -734,6 +734,16 @@ async function runTests() {
     const creditorAllocPdf = await accVoucherService.getAllocationPrintPdf(company.id, 'creditor', [allocSupplierId], '2026-01-01', '2026-12-31');
     check('Creditor-side Print Allocation PDF is also non-empty', creditorAllocPdf.length > 0);
 
+    // AC_PLUS's own printed report never shows a bare account name with nothing under it --
+    // matters more now that Select All can pull in every account in the company, most of which
+    // will have zero activity in a given range.
+    const noActivityAccountId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'No Activity Debtor', 0, 'Sundry Debtors', 0, ?)`, [noActivityAccountId, company.id, now21]);
+    const noActivityPdf = await accVoucherService.getAllocationPrintPdf(company.id, 'debtor', [noActivityAccountId], '2026-01-01', '2026-12-31');
+    const noActivityDoc = await PDFDocument.load(noActivityPdf);
+    check('An account with zero allocation activity produces a single "no activity" page, not a crash or an invalid empty PDF',
+      noActivityDoc.getPageCount() === 1 && noActivityPdf.length > 0, `pages=${noActivityDoc.getPageCount()}`);
+
     // A bill settled across two separate allocations (an ordinary receipt, then an on_account
     // entry) must show a correctly running "Balance Amt." on each row -- not just the last one.
     const runningBalanceBill = await db.get('SELECT id, total_amount FROM sales WHERE invoice_number = 9501 AND company_id = ?', [company.id]);
