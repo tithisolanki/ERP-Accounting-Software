@@ -69,7 +69,9 @@ export const voucherSidebarItems = [
 // MnuDebAlocEntry/MnuCreAlocEntry), not nested under any extra "Allocations" submenu.
 export const allocationEntrySidebarItems = [
   { id: 'sales_allocation', name: 'Sales Allocation Entry' },
-  { id: 'purchase_allocation', name: 'Purchase Allocation Entry' }
+  { id: 'purchase_allocation', name: 'Purchase Allocation Entry' },
+  { id: 'sales_allocation_print', name: 'Print Sales Allocation' },
+  { id: 'purchase_allocation_print', name: 'Print Purchase Allocation' }
 ];
 
 export const accountVoucherItems = [
