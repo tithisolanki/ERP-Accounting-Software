@@ -99,7 +99,6 @@ CREATE TABLE sales_returns (
   against_sale_id TEXT NOT NULL,     -- "Against Bill No." -- exactly one original bill
   against_bill_date TEXT NOT NULL,   -- "Bill Date", as AC_PLUS's own field separately stores it
   return_type TEXT NOT NULL,         -- 'Grey' or 'Finish' -- AC_PLUS's Option1 radio
-  broker_name TEXT,
   taxable_value REAL NOT NULL,
   gst_amount REAL NOT NULL,
   total_amount REAL NOT NULL,
@@ -140,9 +139,13 @@ CREATE INDEX idx_sales_returns_against_sale ON sales_returns(against_sale_id);
 CREATE UNIQUE INDEX ux_sales_returns_number ON sales_returns(company_id, financial_year, return_number);
 ```
 
-`purchase_returns`/`purchase_return_items` mirror the above exactly, with
-`supplier_id` + `against_purchase_id` (→ `purchases.id`) in place of `customer_id` +
-`against_sale_id`. Both new index/table pairs go in `db/schema/voucher.sql`, following
+`purchase_returns`/`purchase_return_items` mirror the above, with `supplier_id` +
+`against_purchase_id` (→ `purchases.id`) in place of `customer_id` + `against_sale_id`,
+**plus one extra column `purchase_returns` has that `sales_returns` doesn't:
+`broker_name TEXT`** — confirmed from the live binary's `APURRETENTRY` form (a `BrkList`
+control) that Purchase Return carries a broker, while `ASALRTENTRY1`'s confirmed field
+list (`AC_PLUS_SCREEN_MAP.md`) and its own control list have no broker field at all.
+Both new index/table pairs go in `db/schema/voucher.sql`, following
 the existing file's layout; a matching `ensureSchemaUpdates` mirror block goes in
 `src/backend/db/index.ts` for existing installs (same pattern as every other table this
 session added — see the Allocation Entry tables for the exact shape to copy).
@@ -166,7 +169,8 @@ mirror), structured exactly like `sales.service.ts`/`salesRepository`:
 
 ## Ledger integration
 
-Two places need one new UNION branch each, both additive (no existing branch changes):
+Four places need a touch -- the first three additive (a new UNION branch, no existing
+branch changes), the fourth a real change to existing balance logic:
 
 - `reportsRepository.getAccountNetBalances` (`reports.repository.ts`): add
   `UNION ALL SELECT customer_id, 0, total_amount FROM sales_returns WHERE company_id=?1`
@@ -176,13 +180,41 @@ Two places need one new UNION branch each, both additive (no existing branch cha
 - `reportsRepository.getAccountPostings`: one new `UNION ALL` block per return type,
   same shape as the existing Sales/Purchase blocks, labelled `'Sales Return'`/
   `'Purchase Return'` with the credit/debit column swapped from the equivalent bill.
-- `accVoucherRepository.getOutstandingBills`/`getOutstandingBillsForAccounts` (used by
-  Outstanding Ledger, Print Allocation, and the receipt/payment bill-picker): the
+- **`reportsRepository.getSalesGst`/`getPurchasesGst`** (feeding
+  `reportsService.getGstReport`, `reports.service.ts:207`): each needs a sibling query
+  (`getSalesReturnsGst`/`getPurchaseReturnsGst`) returning the same shape
+  (`invoice_number`/`return_number`, date, taxable_value, gst_amount, party_name,
+  gst_number, party_state) from `sales_returns`/`purchase_returns`. `getGstReport`
+  appends these as their own rows in the existing `salesList`/`purchasesList` -- not
+  netted into the original invoice's row -- with taxable/CGST/SGST/IGST stored negative,
+  the same way a real GSTR-1 filing reports Credit/Debit Notes as their own line items
+  in their own section, not folded into the original invoice. This is not optional
+  scope: it's the literal problem ROADMAP.md's R3 entry names ("faking them with
+  journals makes GST returns wrong") and it's cheap -- the same shape as the other three
+  touch points here, no new infrastructure. (The GST Summary Report itself is still the
+  simplified, pre-R4 version -- flat rate, no GST Title Master -- this only makes that
+  existing report correctly reflect returns, it doesn't rebuild it.)
+- **`accVoucherRepository.getOutstandingBills`/`getOutstandingBillsForAccounts`** (used
+  by Outstanding Ledger, Print Allocation, and the receipt/payment bill-picker): the
   `against_sale_id` bill's own `balanceDue` calculation needs its matching return's
   `total_amount` subtracted, the same way `receipt_allocations`/`allocation_entry_bills`
   already are — a bill with ₹10,000 total, ₹2,000 returned, and ₹3,000 paid should show
   ₹5,000 due, not ₹8,000. This is the one place a return's bill-linkage actually changes
   existing query logic, not just adds a new branch.
+
+**Over-return handling (my call, settling the brainstorm's open anti-goal):** allow,
+don't hard-reject -- unlike the account-mismatch case (always a real error, always
+rejected), a return that would take a bill's remaining balance negative is flagged as a
+warning the caller must explicitly confirm, not silently blocked. `buildSalesReturn`
+computes the bill's current `balanceDue` (reusing the same calculation
+`getOutstandingBills` already does) and throws a distinguishable `OverReturnError` if
+the new return's `total_amount` would exceed it and the request didn't set
+`confirmOverage: true`; the frontend catches that specific error and shows a
+confirmation dialog ("This exceeds the bill's remaining balance by ₹X — continue?")
+before resubmitting with the flag set. This check is at the whole-bill `total_amount`
+level only, not per line/quality -- consistent with this document's own Non-goal of no
+stock/quantity tracking, since there's no FK from `sales_return_items` back to the
+original `sales_items` row to check against at line granularity.
 
 ## API
 
@@ -190,7 +222,12 @@ Two places need one new UNION branch each, both additive (no existing branch cha
 `GET /api/sales-returns` (register), `GET /api/sales-returns/next-number`,
 `GET /api/sales-returns/print-pdf` — same route shape as `/api/transactions/sales`,
 purchase-return mirror under its own prefix. Follows `AuthenticatedRequest`/
-`req.user.company_id` scoping used everywhere else in this codebase.
+`req.user.company_id` scoping used everywhere else in this codebase. The POST/PUT body
+takes an optional `confirmOverage: boolean` (default false) per the over-return
+handling in Ledger Integration; the controller passes it straight through to
+`buildSalesReturn`/`buildPurchaseReturn` and returns the `OverReturnError`'s message
+as a 409 (not 400/500) so the frontend can distinguish "needs confirmation" from a
+real validation failure.
 
 ## Frontend
 
@@ -219,9 +256,11 @@ how AC_PLUS itself places "Sales Return Entry" under Data Entry ▸ Sales Invoic
   picked for the return and the `customer_id`/`supplier_id` on the referenced bill must
   match) rather than silently letting a return land on the wrong ledger.
 - **A return whose total exceeds what's left on the bill** (already fully paid off, or
-  already partly returned past the original amount). AC_PLUS doesn't appear to block
-  this either, but a trader using TexFin for real bookkeeping would expect at least a
-  warning, not a bill balance that goes negative with no explanation.
+  already partly returned past the original amount). Resolved in Ledger Integration
+  above (`OverReturnError` + `confirmOverage`) -- the test here is that the warning
+  path actually fires at the right threshold (bill `balanceDue`, not `total_amount`,
+  so a partly-paid bill's remaining room is correctly smaller) and that a confirmed
+  overage still saves rather than looping back to the same error.
 - **Financial year mismatch**: a return dated in a different FY than its original bill.
   Confirmed plausible in real data (goods returned months after an invoice). The return
   keeps its own `financial_year` (the date it happened), and the bill-balance query
@@ -242,8 +281,7 @@ how AC_PLUS itself places "Sales Return Entry" under Data Entry ▸ Sales Invoic
 - Exact validation error message wording (follow this codebase's existing style:
   short, specific, e.g. `"Purchase entry number ${n} already exists in ${fy}."`).
 - Whether the Register page's filters match `PurchaseRegister`'s exact filter set or
-  need adjusting for returns' narrower field set (no challan number, no broker on the
-  Sales Return side per AC_PLUS's own field list — confirmed Purchase Return has a
-  Broker field, Sales Return's confirmed field list does not mention one).
+  need adjusting for returns' narrower field set (no challan number on either side, no
+  broker on the Sales Return side — see Schema for the confirmed broker-field split).
 - The exact PDF layout's column set for Print (reuse `generateInvoicePdf`'s structure,
   swap the title and the "Against Bill" reference line in).
