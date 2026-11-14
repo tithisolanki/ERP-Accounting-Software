@@ -1,12 +1,13 @@
 export const exportToCSV = (
-  activeRegister: 'sales' | 'purchases' | 'journal',
+  activeRegister: 'sales' | 'purchases' | 'journal' | 'sales_returns',
   startDate: string,
   endDate: string,
   filteredSales: any[],
   salesRegisterType: 'summarised' | 'detailed',
   filteredPurchases: any[],
   purchaseRegisterType: 'summarised' | 'detailed',
-  filteredJournals: any[]
+  filteredJournals: any[],
+  filteredSalesReturns: any[] = []
 ) => {
   let headers: string[] = [];
   let rows: any[] = [];
@@ -124,6 +125,18 @@ export const exportToCSV = (
         });
       }
     });
+  } else if (activeRegister === 'sales_returns') {
+    filename = `Sales_Return_Register_${startDate}_to_${endDate}.csv`;
+    headers = ['Date', 'Return No', 'Customer Name', 'Return Type', 'Taxable Val', 'GST Amt', 'Grand Total'];
+    rows = filteredSalesReturns.map(r => [
+      r.date,
+      r.return_number,
+      r.customer_name,
+      r.return_type || '',
+      r.taxable_value,
+      r.gst_amount,
+      r.total_amount
+    ]);
   }
 
   const csvContent = [
