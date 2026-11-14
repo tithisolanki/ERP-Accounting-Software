@@ -4,6 +4,22 @@
   "description": "TexFin - Textile Trading Desktop ERP Software",
   "main": "dist/src/electron/main.js",
   "author": "Tithi Solanki",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tithisolanki/ERP-Accounting-Software.git"
+  },
+  "keywords": [
+    "erp",
+    "accounting",
+    "electron",
+    "react",
+    "typescript",
+    "textile",
+    "inventory",
+    "gst",
+    "invoicing"
+  ],
   "scripts": {
     "dev": "concurrently -n \"vite,tsc,electron\" -c \"blue,yellow,green\" \"vite\" \"tsc -w -p tsconfig.electron.json\" \"nodemon --delay 1500ms --watch dist/src --ext js --exec electron .\"",
     "build:frontend": "vite build",

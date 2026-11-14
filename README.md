@@ -1,82 +1,117 @@
-# TexFin - Offline Desktop Textile Accounting ERP
+<div align="center">
 
-TexFin is a professional Windows desktop ERP software tailored for textile trading businesses. It helps trading firms manage fabric purchases, invoices, stock inventory, double-entry party ledgers, GST filings, and payment books completely offline.
+<img src="build/icon.ico" width="72" alt="TexFin logo" />
 
----
+# TexFin — Ledger
 
-## Technical Stack
+**Offline-first desktop accounting & inventory ERP for textile trading businesses**
 
-- **Shell**: Electron
-- **Client**: React (TypeScript) + Tailwind CSS + Recharts
-- **Server**: Express.js
-- **Database**: SQLite3
-- **Authentication**: JWT & Bcryptjs
-- **PDF Engines**: pdf-lib
-- **Excel Exports**: xlsx
-- **Cloud Sync**: Supabase Client
+[![Electron](https://img.shields.io/badge/Electron-30-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![License](https://img.shields.io/badge/License-Proprietary-lightgrey)](LICENSE)
 
----
-
-## Project Structure
-
-```
-d:\ac-clone\
-├── src/
-│   ├── main.ts              # Electron core setup
-│   ├── preload.ts           # Preload IPC bridge
-│   ├── backend/
-│   │   ├── index.ts         # Express server config
-│   │   ├── db.ts            # SQLite engine & database seeds
-│   │   ├── routes/          # Auth, Masters, Transactions, Reports, Settings
-│   │   └── services/        # PDF layout, Excel compiler, Sync agent
-│   └── frontend/
-│       ├── main.tsx         # React root entry
-│       ├── index.css        # Base styling and HSL theme tokens
-│       ├── store/           # Zustand state store
-│       └── pages/           # Dashboard, Masters, Vouchers, Ledgers, Reports, Settings
-├── tsconfig.json            # Frontend compiler options
-├── tsconfig.electron.json   # Backend compiler options
-├── vite.config.ts           # Vite compile build settings
-└── package.json             # Scripts & node dependencies
-```
+</div>
 
 ---
 
-## Getting Started
+TexFin is a Windows desktop ERP built for Indian textile trading firms, replacing a legacy
+DOS/Windows accounting package (**AC_PLUS**) with the same day-to-day workflows — multi-company
+ledgers, GST-compliant invoicing, double-entry bookkeeping, and stock tracking — in a modern,
+offline-capable desktop app with optional cloud sync.
 
-### 1. Install Dependencies
-Make sure you have Node.js and NPM installed, then run:
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="./.github/screenshots/login.png" alt="Login screen" /><br/><sub>Multi-company login</sub></td>
+<td width="50%"><img src="./.github/screenshots/account-form.png" alt="Account registration form" /><br/><sub>Account master form</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="./.github/screenshots/sidebar-accordion.png" alt="Collapsible sidebar navigation" /><br/><sub>Collapsible sidebar navigation</sub></td>
+<td width="50%" valign="top">
+
+**At a glance**
+- Multi-company, multi-financial-year
+- Role-based access (Admin / User)
+- GST-aware vouchers with PDF output
+- Offline SQLite, optional Supabase sync
+
+</td>
+</tr>
+</table>
+
+## Features
+
+- **Multi-company accounting** — switch between companies and financial years from one login screen, each with its own ledgers, inventory, and users.
+- **Double-entry vouchers** — Sales Invoice, Purchase Bill, Delivery Challan, Bank/Cash Payment & Receipt, Journal Voucher, Credit/Debit Note, bill-wise allocation entries.
+- **GST handling** — automatic CGST/SGST vs. IGST split based on company/customer state, HSN-wise GST mapping.
+- **Reports & registers** — Trial Balance, Party Ledger, Outstanding & Ageing, Overdue Interest, Sales/Purchase/Journal Registers, with print-ready and CSV/Excel export.
+- **Inventory** — fabric quality, category, and description masters with piece/meter stock tracking.
+- **PDF generation** — multi-copy invoice/challan printing, ledger statements, allocation reports.
+- **Offline-first** — runs entirely on a local SQLite database; an optional Supabase-backed sync layer keeps multiple machines in sync when online.
+- **AC_PLUS data import** — a dedicated tool (`scripts/acplus/`) migrates an existing AC_PLUS Access database into TexFin, self-verifying every account's trial balance against the source.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Desktop shell | Electron |
+| UI | React 18 + TypeScript, Tailwind CSS, Zustand, React Hook Form + Zod |
+| API | Express.js (embedded in the Electron main process) |
+| Database | SQLite (local), Supabase (optional cloud sync) |
+| Auth | JWT + bcrypt |
+| Documents | pdf-lib (PDF), xlsx (Excel) |
+| Build | Vite, electron-builder |
+
+## Getting started
+
 ```bash
+# Install dependencies
 npm install
-```
 
-### 2. Run in Development Mode
-Launch the React frontend dev server and Electron wrapper simultaneously:
-```bash
+# Run in development mode (Vite + Electron, hot reload)
 npm run dev
-```
 
-### 3. Run Backend Integration Tests
-Execute the automated test suite verifying SQLite database queries, stock re-balancers, and account ledger sheets:
-```bash
+# Run the backend integration test suite
 npm run test:backend
-```
 
-### 4. Build and Package
-To compile the production bundles and package the application as a standalone Windows EXE installer:
-```bash
+# Build a production Windows installer
 npm run package
 ```
-Standalones are compiled into the `release/` directory.
 
----
+The packaged installer lands in `release/`. In development, create a `.env` file (see
+`db/` and `src/backend/` for the variables it reads — `PORT`, `DB_PATH`, `JWT_SECRET`,
+and optionally `SUPABASE_URL` / `SUPABASE_KEY` for cloud sync).
 
-## Key Features
+## Project structure
 
-1. **Company & Role scopes**: Every data table is scoped by `company_id`. Built-in role checks restrict operadores from deleting documents or creating master entries.
-2. **Double-Entry Party Ledger**: Computes real-time chronologically sorted statements with running balances automatically.
-3. **Auto-Balancing Inventory**: Purchases automatically increase available meters for specific lot numbers, and sales invoices check and decrease stock levels.
-4. **GST Splitting**: Compares company and customer states to automatically split CGST/SGST (intra-state) or apply IGST (inter-state).
-5. **PDF Invoicing**: Generates A4 layout-stable invoices with totals, GST grids, and terms & conditions.
-6. **Robust Backup & Restore**: Creates raw ZIP files of the SQLite database. Overwrites and restores databases dynamically by safely closing and reopening active SQLite file streams.
-7. **Cloud Synchronization**: Pushes dirty local records (`is_dirty = 1`) to Supabase and pulls remote updates, resolving conflicts through timestamps.
+```
+src/
+├── backend/          # Express API: controllers, services, repositories, routes
+│   ├── db/            # SQLite connection, migrations, seed data
+│   └── middleware/    # JWT auth
+├── electron/          # Electron main process + preload bridge
+├── frontend/          # React app
+│   ├── app/            # Shell: top nav, sidebar, routing
+│   ├── components/     # Shared UI primitives (Button, Input, Table, Modal, ConfirmModal...)
+│   ├── modules/         # Feature modules: masters, vouchers, registers, reports, opening balances
+│   ├── pages/           # Top-level routed pages
+│   ├── services/        # API client layer
+│   └── store/           # Zustand global store
+└── shared/            # Types shared between frontend and backend
+db/                   # SQL schema, Supabase schema, seed scripts
+scripts/              # Build helpers and the AC_PLUS data-import tool
+tests/                # Backend integration tests
+```
+
+## License
+
+Proprietary — All Rights Reserved. See [LICENSE](LICENSE). This repository is public for
+portfolio and demonstration purposes; no reuse, modification, or redistribution is permitted
+without written permission from the author.
+
+## Author
+
+**Tithi Solanki** — [github.com/tithisolanki](https://github.com/tithisolanki)
