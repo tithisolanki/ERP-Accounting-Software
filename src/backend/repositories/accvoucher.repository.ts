@@ -4,10 +4,10 @@ export class AccVoucherRepository {
   async findRawVouchers(companyId: string, tableName: 'payments' | 'receipts'): Promise<any[]> {
     const db = await getDb();
     return db.all(`
-      SELECT p.*, acc.name as account_name 
+      SELECT p.*, acc.name as account_name
       FROM ${tableName} p
       JOIN accounts acc ON p.account_id = acc.id
-      WHERE p.company_id = ? 
+      WHERE p.company_id = ?
       ORDER BY p.date DESC, p.updated_at DESC
     `, [companyId]);
   }
@@ -52,10 +52,10 @@ export class AccVoucherRepository {
   async findRawJournalVouchers(companyId: string): Promise<any[]> {
     const db = await getDb();
     return db.all(`
-      SELECT jv.*, acc.name as account_name 
+      SELECT jv.*, acc.name as account_name
       FROM journal_vouchers jv
       JOIN accounts acc ON jv.account_id = acc.id
-      WHERE jv.company_id = ? 
+      WHERE jv.company_id = ?
       ORDER BY jv.date DESC, jv.updated_at DESC
     `, [companyId]);
   }
@@ -339,40 +339,6 @@ export class AccVoucherRepository {
     );
   }
 
-  /** Account id -> name for every id that actually exists under this company (missing ids are
-   * simply absent from the result, so a caller can tell a real account from a typo'd one). */
-  async getAccountNames(companyId: string, accountIds: string[]): Promise<{ id: string; name: string }[]> {
-    if (accountIds.length === 0) return [];
-    const db = await getDb();
-    const placeholders = accountIds.map(() => '?').join(',');
-    return db.all(
-      `SELECT id, name FROM accounts WHERE company_id = ? AND id IN (${placeholders})`,
-      [companyId, ...accountIds]
-    );
-  }
-
-  /** Every allocation-entry bill line for several accounts within a date range, for Print
-   * Allocation (R20) -- AC_PLUS's ADEBALOCPRNT/ACREALOCPRNT, confirmed multi-account + date range. */
-  async getAllocationEntriesForPrint(
-    companyId: string, side: 'debtor' | 'creditor', accountIds: string[], startDate: string, endDate: string
-  ): Promise<any[]> {
-    if (accountIds.length === 0) return [];
-    const db = await getDb();
-    const placeholders = accountIds.map(() => '?').join(',');
-    return db.all(
-      `SELECT ae.account_id AS accountId, ae.entry_no AS entryNo, ae.date, ae.entry_type AS entryType,
-              aeb.bill_type AS billType, aeb.amount_applied AS amountApplied, aeb.discount_amount AS discountAmount,
-              CASE WHEN aeb.bill_type = 'sale' THEN s.invoice_number ELSE p.purchase_number END AS billNumber
-       FROM allocation_entries ae
-       JOIN allocation_entry_bills aeb ON aeb.allocation_entry_id = ae.id
-       LEFT JOIN sales s ON aeb.bill_type = 'sale' AND s.id = aeb.bill_id
-       LEFT JOIN purchases p ON aeb.bill_type = 'purchase' AND p.id = aeb.bill_id
-       WHERE ae.company_id = ? AND ae.side = ? AND ae.account_id IN (${placeholders}) AND ae.date BETWEEN ? AND ?
-       ORDER BY ae.account_id, ae.date, ae.entry_no`,
-      [companyId, side, ...accountIds, startDate, endDate]
-    );
-  }
-
   /** One allocation entry with its bill-wise lines, for re-opening to edit or for Print Allocation. */
   async getAllocationEntryDetail(companyId: string, side: 'debtor' | 'creditor', entryNo: string): Promise<{ header: any; bills: any[] } | null> {
     const db = await getDb();
@@ -397,6 +363,124 @@ export class AccVoucherRepository {
       [header.id]
     );
     return { header, bills };
+  }
+
+  /** Account id -> name for every id that actually exists under this company (missing ids are
+   * simply absent from the result, so a caller can tell a real account from a typo'd one). */
+  async getAccountNames(companyId: string, accountIds: string[]): Promise<{ id: string; name: string }[]> {
+    if (accountIds.length === 0) return [];
+    const db = await getDb();
+    const placeholders = accountIds.map(() => '?').join(',');
+    return db.all(
+      `SELECT id, name FROM accounts WHERE company_id = ? AND id IN (${placeholders})`,
+      [companyId, ...accountIds]
+    );
+  }
+
+  /**
+   * Every bill-settling row for several accounts within a date range, for Print Allocation (R20)
+   * -- AC_PLUS's ADEBALOCPRNT/ACREALOCPRNT, confirmed multi-account + date range via the live
+   * binary, and confirmed via a real printed sample to combine BOTH sources that write into
+   * ADALO/ACALO: ordinary bill-wise receipts/payments (R7) AND standalone Allocation Entries
+   * (R20) -- not just this screen's own entries. AC_PLUS also includes Credit/Debit Notes and
+   * bill-linked Journal Vouchers in this report; TexFin doesn't model bill-wise linkage for
+   * those yet (R3, unbuilt), so they're not in this union -- a real but out-of-scope-for-now gap.
+   */
+  async getAllocationHistoryForPrint(
+    companyId: string, side: 'debtor' | 'creditor', accountIds: string[], startDate: string, endDate: string
+  ): Promise<any[]> {
+    if (accountIds.length === 0) return [];
+    const db = await getDb();
+    const placeholders = accountIds.map(() => '?').join(',');
+
+    if (side === 'debtor') {
+      return db.all(
+        `SELECT a.id AS accountId, a.name AS accountName,
+                rcpt.id AS voucherId, 'receipt' AS voucherKind, rcpt.date AS voucherDate, rcpt.payment_mode AS voucherLabel,
+                rcpt.amount AS voucherAmount, NULL AS voucherNo, rcpt.notes AS voucherNotes,
+                'sale' AS billType, s.id AS billId, s.date AS billDate, s.invoice_number AS billNumber, s.total_amount AS billAmount,
+                (ra.amount_applied + ra.discount_amount) AS adjustAmount
+         FROM receipt_allocations ra
+         JOIN receipts rcpt ON rcpt.id = ra.receipt_id
+         JOIN sales s ON s.id = ra.sale_id
+         JOIN accounts a ON a.id = s.customer_id
+         WHERE rcpt.company_id = ? AND a.id IN (${placeholders}) AND rcpt.date BETWEEN ? AND ?
+         UNION ALL
+         SELECT a.id, a.name,
+                ae.id, ae.entry_type, ae.date, ae.entry_type,
+                ae.amount, ae.entry_no, NULL,
+                'sale', s.id, s.date, s.invoice_number, s.total_amount,
+                (aeb.amount_applied + aeb.discount_amount)
+         FROM allocation_entry_bills aeb
+         JOIN allocation_entries ae ON ae.id = aeb.allocation_entry_id
+         JOIN sales s ON s.id = aeb.bill_id AND aeb.bill_type = 'sale'
+         JOIN accounts a ON a.id = ae.account_id
+         WHERE ae.company_id = ? AND ae.side = 'debtor' AND a.id IN (${placeholders}) AND ae.date BETWEEN ? AND ?
+         ORDER BY accountName, voucherDate, voucherId`,
+        [companyId, ...accountIds, startDate, endDate, companyId, ...accountIds, startDate, endDate]
+      );
+    }
+
+    return db.all(
+      `SELECT a.id AS accountId, a.name AS accountName,
+              pmt.id AS voucherId, 'payment' AS voucherKind, pmt.date AS voucherDate, pmt.payment_mode AS voucherLabel,
+              pmt.amount AS voucherAmount, NULL AS voucherNo, pmt.notes AS voucherNotes,
+              'purchase' AS billType, p.id AS billId, p.date AS billDate, p.purchase_number AS billNumber, p.total_amount AS billAmount,
+              (pa.amount_applied + pa.discount_amount) AS adjustAmount
+       FROM payment_allocations pa
+       JOIN payments pmt ON pmt.id = pa.payment_id
+       JOIN purchases p ON p.id = pa.purchase_id
+       JOIN accounts a ON a.id = p.supplier_id
+       WHERE pmt.company_id = ? AND a.id IN (${placeholders}) AND pmt.date BETWEEN ? AND ?
+       UNION ALL
+       SELECT a.id, a.name,
+              ae.id, ae.entry_type, ae.date, ae.entry_type,
+              ae.amount, ae.entry_no, NULL,
+              'purchase', p.id, p.date, p.purchase_number, p.total_amount,
+              (aeb.amount_applied + aeb.discount_amount)
+       FROM allocation_entry_bills aeb
+       JOIN allocation_entries ae ON ae.id = aeb.allocation_entry_id
+       JOIN purchases p ON p.id = aeb.bill_id AND aeb.bill_type = 'purchase'
+       JOIN accounts a ON a.id = ae.account_id
+       WHERE ae.company_id = ? AND ae.side = 'creditor' AND a.id IN (${placeholders}) AND ae.date BETWEEN ? AND ?
+       ORDER BY accountName, voucherDate, voucherId`,
+      [companyId, ...accountIds, startDate, endDate, companyId, ...accountIds, startDate, endDate]
+    );
+  }
+
+  /** Every settlement ever made (both sources, no date limit) against a set of bills, oldest
+   * first -- lets the print compute each row's TRUE remaining balance, not one scoped to the
+   * print's own date window (a bill can have older settlements before the window starts). */
+  async getFullBillAllocationHistory(companyId: string, billType: 'sale' | 'purchase', billIds: string[]): Promise<{ billId: string; date: string; amount: number }[]> {
+    if (billIds.length === 0) return [];
+    const db = await getDb();
+    const placeholders = billIds.map(() => '?').join(',');
+    if (billType === 'sale') {
+      return db.all(
+        `SELECT sale_id AS billId, date, amount FROM (
+           SELECT ra.sale_id, rcpt.date, (ra.amount_applied + ra.discount_amount) AS amount, rcpt.id AS ord1, '' AS ord2
+           FROM receipt_allocations ra JOIN receipts rcpt ON rcpt.id = ra.receipt_id
+           WHERE ra.company_id = ? AND ra.sale_id IN (${placeholders})
+           UNION ALL
+           SELECT aeb.bill_id, ae.date, (aeb.amount_applied + aeb.discount_amount), '', ae.id
+           FROM allocation_entry_bills aeb JOIN allocation_entries ae ON ae.id = aeb.allocation_entry_id
+           WHERE aeb.company_id = ? AND aeb.bill_type = 'sale' AND aeb.bill_id IN (${placeholders})
+         ) ORDER BY date, ord1, ord2`,
+        [companyId, ...billIds, companyId, ...billIds]
+      );
+    }
+    return db.all(
+      `SELECT purchase_id AS billId, date, amount FROM (
+         SELECT pa.purchase_id, pmt.date, (pa.amount_applied + pa.discount_amount) AS amount, pmt.id AS ord1, '' AS ord2
+         FROM payment_allocations pa JOIN payments pmt ON pmt.id = pa.payment_id
+         WHERE pa.company_id = ? AND pa.purchase_id IN (${placeholders})
+         UNION ALL
+         SELECT aeb.bill_id, ae.date, (aeb.amount_applied + aeb.discount_amount), '', ae.id
+         FROM allocation_entry_bills aeb JOIN allocation_entries ae ON ae.id = aeb.allocation_entry_id
+         WHERE aeb.company_id = ? AND aeb.bill_type = 'purchase' AND aeb.bill_id IN (${placeholders})
+       ) ORDER BY date, ord1, ord2`,
+      [companyId, ...billIds, companyId, ...billIds]
+    );
   }
 }
 export const accVoucherRepository = new AccVoucherRepository();

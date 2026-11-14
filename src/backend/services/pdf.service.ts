@@ -883,19 +883,26 @@ export async function generateLedgerPdf(data: LedgerPdfData): Promise<Uint8Array
   return pdfDoc.save();
 }
 
-export interface AllocationEntryPdfRow {
+/** One line of the Allocation Print. date/voucherLabel/voucherNo/voucherAmount are '' / null on
+ * every row after a voucher's first (one settling voucher can span several bills), matching the
+ * real printed report's merged-down presentation. */
+export interface AllocationPrintRow {
   date: string;
-  entryNo: string;
-  entryType: 'on_account' | 'kasar';
-  billNumber: string | number;
+  voucherLabel: string;
+  voucherNo: string;
+  voucherAmount: number | null;
+  billDate: string;
   billType: 'sale' | 'purchase';
-  amount: number;
+  billNumber: string | number;
+  billAmount: number;
+  adjustAmount: number;
+  balanceAfter: number;
 }
 
 export interface AccountAllocationPdfData {
   account: { name: string };
-  rows: AllocationEntryPdfRow[];
-  totalAmount: number;
+  rows: AllocationPrintRow[];
+  subtotal: { voucherTotal: number; billTotal: number; adjustTotal: number };
 }
 
 export interface AllocationPrintPdfData {
@@ -906,68 +913,114 @@ export interface AllocationPrintPdfData {
   endDate: string;
 }
 
-/** Draws the header block for one account's page of the Allocation Print PDF. Returns the y to start rows at. */
-function drawAllocationPrintHeader(
+const ALLOC_ROWS_PER_PAGE = 38;
+const ALLOC_ROW_HEIGHT = 12;
+const ALLOC_PAGE = [842, 595] as const; // landscape: 10 columns need the width
+
+type AllocLineItem =
+  | { kind: 'accountHeader'; accountName: string }
+  | { kind: 'row'; row: AllocationPrintRow }
+  | { kind: 'subtotal'; subtotal: AccountAllocationPdfData['subtotal'] };
+
+/** Flattens all accounts into one continuous sequence of lines, then splits into pages of
+ * ALLOC_ROWS_PER_PAGE lines each -- no per-account page reset (confirmed from a real printed
+ * sample: an account's rows can start mid-page and a page break mid-account just repeats that
+ * account's name header at the top of the next page before continuing its rows). */
+function paginateAllocationPrint(accounts: AccountAllocationPdfData[]): AllocLineItem[][] {
+  const flat: AllocLineItem[] = [];
+  for (const acc of accounts) {
+    flat.push({ kind: 'accountHeader', accountName: acc.account.name });
+    for (const row of acc.rows) flat.push({ kind: 'row', row });
+    flat.push({ kind: 'subtotal', subtotal: acc.subtotal });
+  }
+
+  const pages: AllocLineItem[][] = [];
+  let current: AllocLineItem[] = [];
+  let currentAccountName: string | null = null;
+  for (const item of flat) {
+    if (current.length === ALLOC_ROWS_PER_PAGE) {
+      pages.push(current);
+      current = [];
+      if (currentAccountName && item.kind !== 'accountHeader') {
+        current.push({ kind: 'accountHeader', accountName: currentAccountName });
+      }
+    }
+    current.push(item);
+    if (item.kind === 'accountHeader') currentAccountName = item.accountName;
+    if (item.kind === 'subtotal') currentAccountName = null;
+  }
+  if (current.length > 0) pages.push(current);
+  return pages;
+}
+
+const ALLOC_COLS = { date: 25, voucherLabel: 85, voucherNo: 165, voucherAmount: 235, billDate: 310, billType: 375, billNumber: 435, billAmount: 500, adjustAmount: 590, balanceAfter: 680 };
+
+function drawAllocationPrintPageHeader(
   page: PDFPage, font: PDFFont, boldFont: PDFFont,
-  company: { name: string }, side: 'debtor' | 'creditor', accountData: AccountAllocationPdfData,
-  startDate: string, endDate: string, isFirstPage: boolean
+  company: { name: string }, side: 'debtor' | 'creditor', startDate: string, endDate: string
 ): number {
-  page.drawText(sanitizeForPdf(company.name), { x: 25, y: 810, size: 12, font: boldFont });
-  page.drawText(`${side === 'debtor' ? 'Debtors' : 'Creditors'} Allocation`, { x: 25, y: 795, size: 10, font: boldFont });
-  page.drawText(sanitizeForPdf(accountData.account.name) + (isFirstPage ? '' : ' (continued)'), { x: 25, y: 780, size: 10, font: boldFont });
-  page.drawText(`${formatDate(startDate)} to ${formatDate(endDate)}`, { x: 25, y: 765, size: 8, font: font });
+  page.drawText(sanitizeForPdf(company.name), { x: 25, y: 565, size: 12, font: boldFont });
+  const title = side === 'debtor'
+    ? `RECEIPT ALLOCATION FROM AS ON ${formatDate(startDate)} TO ${formatDate(endDate)}`
+    : `PAYMENT ALLOCATION FROM AS ON ${formatDate(startDate)} TO ${formatDate(endDate)}`;
+  page.drawText(title, { x: 25, y: 548, size: 10, font: boldFont });
 
-  let y = 745;
-  page.drawText('Date', { x: 25, y, size: 8, font: boldFont });
-  page.drawText('Entry No.', { x: 100, y, size: 8, font: boldFont });
-  page.drawText('Type', { x: 200, y, size: 8, font: boldFont });
-  page.drawText('Bill No.', { x: 300, y, size: 8, font: boldFont });
-  page.drawText('Amount', { x: 450, y, size: 8, font: boldFont });
-  y -= LEDGER_ROW_HEIGHT;
-
+  let y = 525;
+  page.drawText('Date', { x: ALLOC_COLS.date, y, size: 7, font: boldFont });
+  page.drawText('Vou.Type', { x: ALLOC_COLS.voucherLabel, y, size: 7, font: boldFont });
+  page.drawText('Voucher No.', { x: ALLOC_COLS.voucherNo, y, size: 7, font: boldFont });
+  page.drawText('Voucher Amt.', { x: ALLOC_COLS.voucherAmount, y, size: 7, font: boldFont });
+  page.drawText('Bill Date', { x: ALLOC_COLS.billDate, y, size: 7, font: boldFont });
+  page.drawText('Type', { x: ALLOC_COLS.billType, y, size: 7, font: boldFont });
+  page.drawText('Bill No.', { x: ALLOC_COLS.billNumber, y, size: 7, font: boldFont });
+  page.drawText('Bill Amt.', { x: ALLOC_COLS.billAmount, y, size: 7, font: boldFont });
+  page.drawText('Adjust Amt.', { x: ALLOC_COLS.adjustAmount, y, size: 7, font: boldFont });
+  page.drawText('Balance Amt.', { x: ALLOC_COLS.balanceAfter, y, size: 7, font: boldFont });
+  y -= ALLOC_ROW_HEIGHT;
   return y;
 }
 
 /**
- * Print Allocation (R20): AC_PLUS's ADEBALOCPRNT/ACREALOCPRNT screens -- a multi-account,
- * date-ranged batch print, confirmed via the live binary (AcList multi-select + Sdate/Edate +
- * a Crystal Reports viewer). Same new-page-per-account/reset-page-number shape as
- * generateLedgerPdf, since AC_PLUS gives neither screen a page-reset option explicitly but both
- * are structurally the same "one or more accounts, one ledger-style table each" report.
+ * Print Allocation (R20): AC_PLUS's ADEBALOCPRNT/ACREALOCPRNT, confirmed from a real printed
+ * sample ("PAYMENT ALLOCATION FROM AS ON ... TO ..."): one continuous document across every
+ * selected account (no per-account page reset, unlike Party Ledger), each account's settling
+ * vouchers listed bill-by-bill with a running "Balance Amt." and a per-account subtotal row.
  */
 export async function generateAllocationPrintPdf(data: AllocationPrintPdfData): Promise<Uint8Array> {
+  const pages = paginateAllocationPrint(data.accounts);
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  for (const accountData of data.accounts) {
-    let pageInAccount = 1;
-    let page = pdfDoc.addPage([595, 842]);
-    let y = drawAllocationPrintHeader(page, font, boldFont, data.company, data.side, accountData, data.startDate, data.endDate, true);
-    let rowsOnPage = 0;
+  pages.forEach((items, pageIndex) => {
+    const page = pdfDoc.addPage([...ALLOC_PAGE]);
+    let y = drawAllocationPrintPageHeader(page, font, boldFont, data.company, data.side, data.startDate, data.endDate);
 
-    for (const row of accountData.rows) {
-      if (rowsOnPage === LEDGER_ROWS_PER_PAGE) {
-        page.drawText(`Page ${pageInAccount}`, { x: 500, y: LEDGER_BOTTOM_MARGIN - 30, size: 8, font: font });
-        pageInAccount += 1;
-        page = pdfDoc.addPage([595, 842]);
-        y = drawAllocationPrintHeader(page, font, boldFont, data.company, data.side, accountData, data.startDate, data.endDate, false);
-        rowsOnPage = 0;
+    for (const item of items) {
+      if (item.kind === 'accountHeader') {
+        page.drawText(sanitizeForPdf(item.accountName), { x: 25, y, size: 9, font: boldFont });
+      } else if (item.kind === 'row') {
+        const r = item.row;
+        if (r.date) page.drawText(formatDate(r.date), { x: ALLOC_COLS.date, y, size: 7, font });
+        if (r.voucherLabel) page.drawText(sanitizeForPdf(r.voucherLabel), { x: ALLOC_COLS.voucherLabel, y, size: 7, font });
+        if (r.voucherNo) page.drawText(sanitizeForPdf(r.voucherNo), { x: ALLOC_COLS.voucherNo, y, size: 7, font });
+        if (r.voucherAmount != null) page.drawText(r.voucherAmount.toFixed(2), { x: ALLOC_COLS.voucherAmount, y, size: 7, font });
+        page.drawText(formatDate(r.billDate), { x: ALLOC_COLS.billDate, y, size: 7, font });
+        page.drawText(r.billType === 'sale' ? 'Sales Bill' : 'Pur.Bill', { x: ALLOC_COLS.billType, y, size: 7, font });
+        page.drawText(String(r.billNumber), { x: ALLOC_COLS.billNumber, y, size: 7, font });
+        page.drawText(r.billAmount.toFixed(2), { x: ALLOC_COLS.billAmount, y, size: 7, font });
+        page.drawText(r.adjustAmount.toFixed(2), { x: ALLOC_COLS.adjustAmount, y, size: 7, font });
+        page.drawText(r.balanceAfter.toFixed(2), { x: ALLOC_COLS.balanceAfter, y, size: 7, font: boldFont });
+      } else {
+        page.drawText(item.subtotal.voucherTotal.toFixed(2), { x: ALLOC_COLS.voucherAmount, y, size: 7, font: boldFont });
+        page.drawText(item.subtotal.billTotal.toFixed(2), { x: ALLOC_COLS.billAmount, y, size: 7, font: boldFont });
+        page.drawText(item.subtotal.adjustTotal.toFixed(2), { x: ALLOC_COLS.adjustAmount, y, size: 7, font: boldFont });
       }
-
-      page.drawText(formatDate(row.date), { x: 25, y, size: 8, font: font });
-      page.drawText(sanitizeForPdf(row.entryNo), { x: 100, y, size: 8, font: font });
-      page.drawText(row.entryType === 'kasar' ? 'Kasar' : 'On Account', { x: 200, y, size: 8, font: font });
-      page.drawText(`${row.billType === 'sale' ? 'Sales' : 'Purchase'} ${row.billNumber}`, { x: 300, y, size: 8, font: font });
-      page.drawText(row.amount.toFixed(2), { x: 450, y, size: 8, font: boldFont });
-
-      y -= LEDGER_ROW_HEIGHT;
-      rowsOnPage += 1;
+      y -= ALLOC_ROW_HEIGHT;
     }
 
-    page.drawText(`Total: ${accountData.totalAmount.toFixed(2)}`, { x: 300, y, size: 8, font: boldFont });
-    page.drawText(`Page ${pageInAccount}`, { x: 500, y: LEDGER_BOTTOM_MARGIN - 30, size: 8, font: font });
-  }
+    page.drawText(`Page ${pageIndex + 1} of ${pages.length}`, { x: 750, y: 20, size: 8, font });
+  });
 
   return pdfDoc.save();
 }

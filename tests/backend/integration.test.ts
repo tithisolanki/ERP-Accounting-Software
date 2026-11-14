@@ -716,19 +716,30 @@ async function runTests() {
     check('Unknown account id is rejected, not silently skipped',
       await rejects(() => accVoucherService.getAllocationPrintPdf(company.id, 'debtor', [crypto.randomUUID()], '2026-01-01', '2026-12-31'), 'not found'));
 
-    const allocRowsInRange = await accVoucherRepository.getAllocationEntriesForPrint(company.id, 'debtor', [allocCustomerId], '2026-02-01', '2026-02-01');
+    const allocRowsInRange = await accVoucherRepository.getAllocationHistoryForPrint(company.id, 'debtor', [allocCustomerId], '2026-02-01', '2026-02-01');
     check('Date range includes an entry dated exactly on the start/end date (ALLOC-OA-1, 2026-02-01)',
-      allocRowsInRange.some((r: any) => r.entryNo === 'ALLOC-OA-1'), JSON.stringify(allocRowsInRange));
+      allocRowsInRange.some((r: any) => r.voucherNo === 'ALLOC-OA-1'), JSON.stringify(allocRowsInRange));
     check('Date range excludes an entry dated outside it (ALLOC-KS-1, 2026-02-05)',
-      !allocRowsInRange.some((r: any) => r.entryNo === 'ALLOC-KS-1'), JSON.stringify(allocRowsInRange));
+      !allocRowsInRange.some((r: any) => r.voucherNo === 'ALLOC-KS-1'), JSON.stringify(allocRowsInRange));
 
-    const allocRowsFullRange = await accVoucherRepository.getAllocationEntriesForPrint(company.id, 'debtor', [allocCustomerId], '2026-01-01', '2026-12-31');
+    const allocRowsFullRange = await accVoucherRepository.getAllocationHistoryForPrint(company.id, 'debtor', [allocCustomerId], '2026-01-01', '2026-12-31');
     check('A fuller range picks up both the on_account and kasar entries',
-      allocRowsFullRange.some((r: any) => r.entryNo === 'ALLOC-OA-1') && allocRowsFullRange.some((r: any) => r.entryNo === 'ALLOC-KS-1'),
+      allocRowsFullRange.some((r: any) => r.voucherNo === 'ALLOC-OA-1') && allocRowsFullRange.some((r: any) => r.voucherNo === 'ALLOC-KS-1'),
       JSON.stringify(allocRowsFullRange));
+
+    const interestCustomerFullRange = await accVoucherRepository.getAllocationHistoryForPrint(company.id, 'debtor', [interestCustomerId], '2026-01-01', '2026-12-31');
+    check('The combined history also includes ordinary bill-wise receipts (R7), not just Allocation Entries (R20)',
+      interestCustomerFullRange.some((r: any) => r.voucherKind === 'receipt'), JSON.stringify(interestCustomerFullRange.slice(0, 1)));
 
     const creditorAllocPdf = await accVoucherService.getAllocationPrintPdf(company.id, 'creditor', [allocSupplierId], '2026-01-01', '2026-12-31');
     check('Creditor-side Print Allocation PDF is also non-empty', creditorAllocPdf.length > 0);
+
+    // A bill settled across two separate allocations (an ordinary receipt, then an on_account
+    // entry) must show a correctly running "Balance Amt." on each row -- not just the last one.
+    const runningBalanceBill = await db.get('SELECT id, total_amount FROM sales WHERE invoice_number = 9501 AND company_id = ?', [company.id]);
+    const runningRows = allocRowsFullRange.filter((r: any) => r.billId === runningBalanceBill.id).sort((a: any, b: any) => a.voucherDate < b.voucherDate ? -1 : 1);
+    check('Both allocations against the same bill (RCPT-OA1 pattern + ALLOC-OA-1 + ALLOC-KS-1) appear as separate rows',
+      runningRows.length >= 2, JSON.stringify(runningRows));
 
     await closeDb();
     console.log('\nDatabase closed.');

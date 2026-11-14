@@ -282,8 +282,15 @@ export class AccVoucherService {
     return accVoucherRepository.getAllocationEntryDetail(companyId, side, entryNo);
   }
 
-  /** Print Allocation (R20): AC_PLUS's ADEBALOCPRNT/ACREALOCPRNT -- a multi-account, date-ranged
-   * batch print, confirmed via the live binary (AcList multi-select + Sdate/Edate). */
+  /**
+   * Print Allocation (R20): AC_PLUS's ADEBALOCPRNT/ACREALOCPRNT -- a multi-account, date-ranged
+   * batch print. Confirmed from a real printed sample ("creditor allocation.pdf") to combine
+   * every bill-settling voucher for the account (ordinary receipts/payments from R7, plus R20's
+   * own standalone Allocation Entries), continuously paginated across all selected accounts
+   * (no per-account page reset, unlike Party Ledger), with a running subtotal per account.
+   * AC_PLUS's real sample also includes Credit/Debit Notes and bill-linked Journal Vouchers --
+   * TexFin doesn't model bill-wise linkage for those yet (R3, unbuilt), so they're left out here.
+   */
   async getAllocationPrintPdf(
     companyId: string, side: 'debtor' | 'creditor', accountIds: string[], startDate: string, endDate: string
   ): Promise<Uint8Array> {
@@ -293,23 +300,79 @@ export class AccVoucherService {
     const missing = accountIds.filter((id) => !foundIds.has(id));
     if (missing.length > 0) throw new Error(`Account(s) not found: ${missing.join(', ')}`);
 
-    const rows = await accVoucherRepository.getAllocationEntriesForPrint(companyId, side, accountIds, startDate, endDate);
+    const rawRows = await accVoucherRepository.getAllocationHistoryForPrint(companyId, side, accountIds, startDate, endDate);
+    const billType = side === 'debtor' ? 'sale' : 'purchase';
+    const billIds = [...new Set(rawRows.map((r: any) => r.billId))];
+    const fullHistory = await accVoucherRepository.getFullBillAllocationHistory(companyId, billType, billIds);
+    const cumulativeByBill = new Map<string, { date: string; amount: number; cumulative: number }[]>();
+    for (const h of fullHistory) {
+      const list = cumulativeByBill.get(h.billId) || [];
+      const running = (list[list.length - 1]?.cumulative || 0) + h.amount;
+      list.push({ date: h.date, amount: h.amount, cumulative: running });
+      cumulativeByBill.set(h.billId, list);
+    }
+    // Each rawRow IS one of fullHistory's entries (same two source tables, just date-unfiltered),
+    // so a monotonically-advancing pointer matched by (date, amount) finds its true running
+    // balance -- including settlements made before the print's own startDate.
+    const pointerByBill = new Map<string, number>();
+
+    const label = (r: any) => {
+      if (r.voucherKind === 'receipt' || r.voucherKind === 'payment') {
+        const mode = r.voucherLabel || 'Cash';
+        return `${mode} ${r.voucherKind === 'receipt' ? 'Receipt' : 'Payment'}`;
+      }
+      return r.voucherKind === 'kasar' ? 'Kasar' : 'On Account';
+    };
+    const voucherNoOf = (r: any) => {
+      if (r.voucherNo) return String(r.voucherNo);
+      const match = r.voucherNotes?.match(/\[Voucher:\s*([^\]]+)\]/);
+      return match ? match[1] : r.voucherId;
+    };
+
     const rowsByAccount = new Map<string, any[]>();
-    for (const row of rows) {
-      const list = rowsByAccount.get(row.accountId) || [];
-      list.push(row);
-      rowsByAccount.set(row.accountId, list);
+    for (const r of rawRows) {
+      const cum = cumulativeByBill.get(r.billId) || [];
+      let ptr = pointerByBill.get(r.billId) || 0;
+      while (ptr < cum.length && !(cum[ptr].date === r.voucherDate && cum[ptr].amount === r.adjustAmount)) ptr++;
+      const cumulative = ptr < cum.length ? cum[ptr].cumulative : (cum[cum.length - 1]?.cumulative || r.adjustAmount);
+      pointerByBill.set(r.billId, ptr + 1);
+      const balanceAfter = r.billAmount - cumulative;
+
+      const list = rowsByAccount.get(r.accountId) || [];
+      list.push({
+        date: r.voucherDate, voucherLabel: label(r), voucherNo: voucherNoOf(r), voucherId: r.voucherId, voucherAmount: r.voucherAmount,
+        billDate: r.billDate, billType: r.billType, billNumber: r.billNumber, billAmount: r.billAmount,
+        adjustAmount: r.adjustAmount, balanceAfter
+      });
+      rowsByAccount.set(r.accountId, list);
     }
 
-    const accountPages = accountIds.map((accountId) => {
-      const account = accounts.find((a) => a.id === accountId)!;
-      const accountRows = rowsByAccount.get(accountId) || [];
-      const pdfRows = accountRows.map((r) => ({
-        date: r.date, entryNo: r.entryNo, entryType: r.entryType,
-        billNumber: r.billNumber, billType: r.billType,
-        amount: r.amountApplied + r.discountAmount
-      }));
-      return { account: { name: account.name }, rows: pdfRows, totalAmount: pdfRows.reduce((sum, r) => sum + r.amount, 0) };
+    const sortedAccounts = [...accounts].sort((a, b) => a.name.localeCompare(b.name));
+    const accountPages = sortedAccounts.map((account) => {
+      const accountRows = rowsByAccount.get(account.id) || [];
+      const seenVouchers = new Set<string>();
+      let voucherTotal = 0;
+      const seenBills = new Set<string>();
+      let billTotal = 0;
+      let adjustTotal = 0;
+      const pdfRows = accountRows.map((r) => {
+        const isFirstForVoucher = !seenVouchers.has(r.voucherId);
+        seenVouchers.add(r.voucherId);
+        if (isFirstForVoucher) voucherTotal += r.voucherAmount;
+        const billKey = `${r.billType}:${r.billNumber}`;
+        if (!seenBills.has(billKey)) {
+          seenBills.add(billKey);
+          billTotal += r.billAmount;
+        }
+        adjustTotal += r.adjustAmount;
+        return {
+          date: isFirstForVoucher ? r.date : '', voucherLabel: isFirstForVoucher ? r.voucherLabel : '',
+          voucherNo: isFirstForVoucher ? r.voucherNo : '', voucherAmount: isFirstForVoucher ? r.voucherAmount : null,
+          billDate: r.billDate, billType: r.billType, billNumber: r.billNumber, billAmount: r.billAmount,
+          adjustAmount: r.adjustAmount, balanceAfter: r.balanceAfter
+        };
+      });
+      return { account: { name: account.name }, rows: pdfRows, subtotal: { voucherTotal, billTotal, adjustTotal } };
     });
 
     return generateAllocationPrintPdf({
