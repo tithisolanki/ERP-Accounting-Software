@@ -69,6 +69,18 @@
   animation: slideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Sidebar dropdown groups: 0fr/1fr grid-rows collapse animates to the content's
+   real height with no JS measuring. The child needs overflow-hidden (applied inline). */
+.sidebar-group-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease;
+}
+
+.sidebar-group-content.open {
+  grid-template-rows: 1fr;
+}
+
 /* Hover scales and card shadows */
 .premium-shadow {
   box-shadow: 0 4px 20px -2px rgba(148, 163, 184, 0.12), 0 2px 8px -1px rgba(148, 163, 184, 0.08);

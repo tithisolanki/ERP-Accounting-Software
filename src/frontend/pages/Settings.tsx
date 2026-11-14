@@ -9,7 +9,7 @@ import { Table } from '../components/Table';
 import { Save, Key, UserPlus, Trash2 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
-  const { token, user, company, addNotification } = useStore();
+  const { token, user, company, addNotification, confirm } = useStore();
   const isAdmin = user?.role === 'ADMIN';
 
   // Company details form fields
@@ -190,7 +190,7 @@ export const Settings: React.FC = () => {
       addNotification('error', 'Cannot delete your own active account.');
       return;
     }
-    if (!window.confirm(`Are you sure you want to delete user account "${username}"?`)) {
+    if (!(await confirm({ message: `Are you sure you want to delete user account "${username}"?`, danger: true, confirmLabel: 'Delete' }))) {
       return;
     }
 
@@ -208,7 +208,7 @@ export const Settings: React.FC = () => {
       {/* Title */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
         <h1 className="text-sm font-bold text-slate-800 tracking-tight">Company Settings</h1>
-        <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Edit company profiles, tax settings, and manage user accounts</p>
+        <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Edit company profiles, tax settings, and manage user accounts</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -492,7 +492,7 @@ export const Settings: React.FC = () => {
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             ) : (
-                              <span className="text-[11px] text-slate-400 font-semibold italic">Current User</span>
+                              <span className="text-[12px] text-slate-500 font-semibold italic">Current User</span>
                             )}
                           </td>
                         </tr>

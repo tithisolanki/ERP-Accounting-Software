@@ -22,7 +22,7 @@ const QualitySchema = z.object({
 type QualityFormValues = z.infer<typeof QualitySchema>;
 
 export const QualityMasterPage: React.FC = () => {
-  const { token, addNotification, user } = useStore();
+  const { token, addNotification, user, confirm } = useStore();
   const [qualities, setQualities] = useState<Quality[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ export const QualityMasterPage: React.FC = () => {
       addNotification('error', 'Standard users cannot modify master entries.');
       return;
     }
-    if (!window.confirm('Are you sure you want to delete this quality? This cannot be undone.')) {
+    if (!(await confirm({ message: 'Are you sure you want to delete this quality? This cannot be undone.', danger: true, confirmLabel: 'Delete' }))) {
       return;
     }
     try {

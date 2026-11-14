@@ -7,7 +7,7 @@ import { Account, StandardMasterItem, City, State, Broker } from '@shared/types'
 import { AccountService, LookupService, GroupService } from '../../../services/api';
 
 export const AccountMasterPage: React.FC = () => {
-  const { token, addNotification, user } = useStore();
+  const { token, addNotification, user, confirm } = useStore();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +70,7 @@ export const AccountMasterPage: React.FC = () => {
 
   const handleDeleteClick = async (id: string) => {
     if (!token) return;
-    if (!window.confirm('Are you sure you want to delete this account? This cannot be undone.')) {
+    if (!(await confirm({ message: 'Are you sure you want to delete this account? This cannot be undone.', danger: true, confirmLabel: 'Delete' }))) {
       return;
     }
     try {

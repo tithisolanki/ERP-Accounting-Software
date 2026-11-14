@@ -258,7 +258,7 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
         <div>
           <h1 className="text-sm font-bold text-slate-800 tracking-tight">Registers</h1>
-          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+          <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
             Track Sales, Purchases and Journal Vouchers logs
           </p>
         </div>
@@ -342,7 +342,7 @@ export const Registers: React.FC<{ initialRegister?: 'sales' | 'purchases' | 'jo
             {/* Header Information */}
             <div className="text-center mb-6">
               <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight leading-none mb-1">
-                {company?.name || 'TexFin Administration'}
+                {company?.name || ''}
               </h2>
               {company?.address && (
                 <p className="text-[11px] text-slate-550 font-bold uppercase tracking-wider leading-none mb-1">

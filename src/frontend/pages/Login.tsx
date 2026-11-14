@@ -200,11 +200,11 @@ export const Login: React.FC = () => {
   };
 
   // Exit App handler
-  const handleExit = () => {
+  const handleExit = async () => {
     if ((window as any).electronAPI && (window as any).electronAPI.closeApp) {
       (window as any).electronAPI.closeApp();
     } else {
-      if (confirm('Close application?')) {
+      if (await store.confirm({ message: 'Close application?' })) {
         window.close();
       }
     }

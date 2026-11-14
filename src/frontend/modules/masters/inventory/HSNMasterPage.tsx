@@ -21,7 +21,7 @@ const HsnSchema = z.object({
 type HsnFormValues = z.infer<typeof HsnSchema>;
 
 export const HSNMasterPage: React.FC = () => {
-  const { token, addNotification, user } = useStore();
+  const { token, addNotification, user, confirm } = useStore();
   const [hsnCodes, setHsnCodes] = useState<HsnCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -72,7 +72,7 @@ export const HSNMasterPage: React.FC = () => {
       addNotification('error', 'Standard users cannot modify master entries.');
       return;
     }
-    if (!window.confirm('Are you sure you want to delete this HSN mapping? This cannot be undone.')) {
+    if (!(await confirm({ message: 'Are you sure you want to delete this HSN mapping? This cannot be undone.', danger: true, confirmLabel: 'Delete' }))) {
       return;
     }
     try {

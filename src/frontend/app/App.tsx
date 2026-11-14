@@ -7,6 +7,7 @@ import { Vouchers, BankVouchers, CashVouchers, JournalVouchers, AllocationEntryP
 import { Registers } from '../modules/registers';
 import { Settings } from '../pages/Settings';
 import { Modal } from '../components/Modal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { Button } from '../components/Button';
 import { BackupRestore } from '../pages/BackupRestore';
 import { Home } from '../pages/Home';
@@ -62,7 +63,7 @@ const SidebarGroup: React.FC<{ title: string; defaultOpen?: boolean; children: R
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 transition-colors cursor-pointer select-none"
+        className="w-full flex items-center justify-between px-3 py-1.5 text-[12px] font-black uppercase tracking-wider text-slate-500 hover:text-slate-700 transition-colors cursor-pointer select-none"
       >
         <span>{title}</span>
         <ChevronDown className={`w-3 h-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
@@ -85,9 +86,9 @@ export const App: React.FC = () => {
   const [reportType, setReportType] = useState<'party_ledger' | 'outstanding_ledger' | 'overdue_interest'>('party_ledger');
   const [misReportType, setMisReportType] = useState<'trial_balance'>('trial_balance');
 
-  const handleTabSwitch = (targetTab: string | null, targetSubTab?: string | null) => {
+  const handleTabSwitch = async (targetTab: string | null, targetSubTab?: string | null) => {
     if ((window as any).isMastersDirty) {
-      if (!window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
+      if (!(await store.confirm({ message: 'You have unsaved changes. Are you sure you want to leave?' }))) {
         return;
       }
       (window as any).isMastersDirty = false;
@@ -304,7 +305,12 @@ export const App: React.FC = () => {
 
   // Render Login Page if not authenticated
   if (!store.token || !store.user) {
-    return <Login />;
+    return (
+      <>
+        <Login />
+        <ConfirmModal />
+      </>
+    );
   }
 
   const bgStyle = desktopBg.startsWith('linear-gradient') || desktopBg.startsWith('rgb') || desktopBg.startsWith('#')
@@ -321,7 +327,7 @@ export const App: React.FC = () => {
           <img src={logo} alt="TexFin Logo" className="w-10 h-10 object-contain" />
           <div>
             <h1 className="font-bold text-slate-800 text-base tracking-wider leading-none">TexFin <span className="text-indigo-600">Ledger</span></h1>
-            <p className="text-[11px] text-slate-400 font-bold tracking-wider uppercase mt-1">Accounting & Inventory</p>
+            <p className="text-[12px] text-slate-500 font-bold tracking-wider uppercase mt-1">Accounting & Inventory</p>
           </div>
         </div>
 
@@ -359,7 +365,7 @@ export const App: React.FC = () => {
             {/* Search results dropdown */}
             {searchResults.length > 0 && (
               <div className="absolute right-0 top-9 w-60 bg-white border border-slate-200 rounded-xl shadow-2xl z-40 p-2 animate-slide-in select-none">
-                <div className="text-[11px] font-black text-slate-400 uppercase tracking-wider px-2 py-1 mb-1">Menus & Actions</div>
+                <div className="text-[12px] font-black text-slate-500 uppercase tracking-wider px-2 py-1 mb-1">Menus & Actions</div>
                 {searchResults.map((res, idx) => (
                   <button
                     key={idx}
@@ -386,7 +392,7 @@ export const App: React.FC = () => {
               </div>
               <div className="text-left hidden 2xl:block">
                 <div className="font-bold text-xs text-slate-800 leading-none">{store.user.username.toUpperCase()}</div>
-                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{store.user.role || 'Admin'}</div>
+                <div className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">{store.user.role || 'Admin'}</div>
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
             </button>
@@ -395,7 +401,7 @@ export const App: React.FC = () => {
               <div className="absolute right-0 top-11 w-56 bg-white border border-slate-200 rounded-xl shadow-2xl z-40 p-2 select-none animate-slide-in">
                 <div className="px-3 py-2 border-b border-slate-100">
                   <div className="font-bold text-xs text-slate-850 truncate">{store.company?.name || 'K.CHANDRAKANT'}</div>
-                  <div className="text-[11px] text-slate-450 font-bold uppercase tracking-wider mt-0.5 font-mono">FY: {store.financialYear}</div>
+                  <div className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5 font-mono">FY: {store.financialYear}</div>
                 </div>
 
                 <div className="py-1">
@@ -418,9 +424,9 @@ export const App: React.FC = () => {
                 <div className="border-t border-slate-100 pt-1 mt-1">
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setProfileDropdownOpen(false);
-                      if (confirm('Are you sure you want to change company or log out?')) {
+                      if (await store.confirm({ message: 'Are you sure you want to change company or log out?' })) {
                         store.logout();
                       }
                     }}
@@ -599,10 +605,7 @@ export const App: React.FC = () => {
                   <BarChart3 className="w-4 h-4 shrink-0" />
                   <span>Register Books</span>
                 </div>
-                <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Transactions
-                </h3>
-                <div className="flex flex-col gap-1">
+                <SidebarGroup title="Transactions" defaultOpen>
                   {registerSidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -614,7 +617,7 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
               </div>
             )}
 
@@ -624,10 +627,7 @@ export const App: React.FC = () => {
                   <BarChart3 className="w-4 h-4 shrink-0" />
                   <span>Reports</span>
                 </div>
-                <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Ledgers
-                </h3>
-                <div className="flex flex-col gap-1 mb-4">
+                <SidebarGroup title="Ledgers" defaultOpen={reportsSidebarItems.some(i => i.id === reportType)}>
                   {reportsSidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -639,12 +639,9 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
 
-                <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Debtors Reports
-                </h3>
-                <div className="flex flex-col gap-1">
+                <SidebarGroup title="Debtors Reports" defaultOpen={debtorReportsSidebarItems.some(i => i.id === reportType)}>
                   {debtorReportsSidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -656,7 +653,7 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
               </div>
             )}
 
@@ -666,10 +663,7 @@ export const App: React.FC = () => {
                   <BarChart3 className="w-4 h-4 shrink-0" />
                   <span>M.I.S. Reports</span>
                 </div>
-                <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Accounting
-                </h3>
-                <div className="flex flex-col gap-1">
+                <SidebarGroup title="Accounting" defaultOpen>
                   {misreportsSidebarItems.map(item => (
                     <button
                       key={item.id}
@@ -681,7 +675,7 @@ export const App: React.FC = () => {
                       <span>{item.name}</span>
                     </button>
                   ))}
-                </div>
+                </SidebarGroup>
               </div>
             )}
 
@@ -691,10 +685,7 @@ export const App: React.FC = () => {
                   <SettingsIcon className="w-4 h-4 shrink-0" />
                   <span>Configurations</span>
                 </div>
-                <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Administration
-                </h3>
-                <div className="flex flex-col gap-1">
+                <SidebarGroup title="Administration" defaultOpen>
                   <button
                     type="button"
                     className="flex items-center gap-3 px-3 py-3 rounded-lg bg-indigo-50/50 text-indigo-650 font-bold text-xs text-left cursor-pointer"
@@ -702,7 +693,7 @@ export const App: React.FC = () => {
                     <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
                     <span>System Settings</span>
                   </button>
-                </div>
+                </SidebarGroup>
               </div>
             )}
 
@@ -712,10 +703,7 @@ export const App: React.FC = () => {
                   <Download className="w-4 h-4 shrink-0" />
                   <span>Backup & Restore</span>
                 </div>
-                <h3 className="px-3 mb-3 text-[11px] font-black uppercase tracking-wider text-slate-400 select-none">
-                  Maintenance
-                </h3>
-                <div className="flex flex-col gap-1">
+                <SidebarGroup title="Maintenance" defaultOpen>
                   <button
                     type="button"
                     className="flex items-center gap-3 px-3 py-3 rounded-lg bg-indigo-50/50 text-indigo-650 font-bold text-xs text-left cursor-pointer"
@@ -723,7 +711,7 @@ export const App: React.FC = () => {
                     <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
                     <span>System Database</span>
                   </button>
-                </div>
+                </SidebarGroup>
               </div>
             )}
 
@@ -901,7 +889,7 @@ export const App: React.FC = () => {
             <p>Specifically tuned for Textile Trading & Invoice Registers.</p>
             <p className="mt-3 text-indigo-650 font-black">Designed & Developed by TITHI SOLANKI</p>
             <p className="text-slate-500 font-bold font-mono">Mobile: 7021206907</p>
-            <p className="mt-4 text-[11px] text-slate-400 font-bold uppercase tracking-wider">All Rights Reserved by TITHI SOLANKI. 2026.</p>
+            <p className="mt-4 text-[12px] text-slate-500 font-bold uppercase tracking-wider">All Rights Reserved by TITHI SOLANKI. 2026.</p>
           </div>
           <div className="text-[11px] text-slate-500 font-semibold leading-relaxed border-t border-slate-200 pt-3 w-full">
             <p className="text-slate-600 font-bold mb-1">Keyboard Shortcuts</p>
@@ -919,6 +907,8 @@ export const App: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      <ConfirmModal />
 
       {/* Notification Toast Stack */}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 pointer-events-none select-none">

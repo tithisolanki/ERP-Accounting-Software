@@ -11,6 +11,20 @@ export interface Notification {
   read: boolean;
 }
 
+export interface ConfirmOptions {
+  title?: string;
+  message: string;
+  danger?: boolean;
+  confirmLabel?: string;
+  // If set, the user must type this exact text before the Confirm button enables
+  // (used for the few actions destructive enough that a click alone isn't enough friction).
+  requireText?: string;
+}
+
+interface ConfirmRequest extends ConfirmOptions {
+  resolve: (ok: boolean) => void;
+}
+
 interface StoreState {
   token: string | null;
   user: User | null;
@@ -21,6 +35,7 @@ interface StoreState {
   isOnline: boolean;
   syncStatus: 'idle' | 'syncing' | 'success' | 'error';
   syncMessage: string | null;
+  confirmRequest: ConfirmRequest | null;
 
   login: (token: string, user: User, company: Company, financialYear: string, loginDate: string) => void;
   logout: () => void;
@@ -30,9 +45,13 @@ interface StoreState {
   clearNotifications: () => void;
   setOnlineStatus: (status: boolean) => void;
   setSyncStatus: (status: StoreState['syncStatus'], message?: string | null) => void;
+  // Replaces window.confirm with the app's own themed dialog; resolves true/false
+  // once the user picks Confirm/Cancel (see <ConfirmModal/>, rendered once in App.tsx).
+  confirm: (options: ConfirmOptions) => Promise<boolean>;
+  resolveConfirm: (ok: boolean) => void;
 }
 
-export const useStore = create<StoreState>((set) => {
+export const useStore = create<StoreState>((set, get) => {
   const cachedToken = sessionStorage.getItem('texfin_token');
   const cachedUser = sessionStorage.getItem('texfin_user');
   const cachedCompany = sessionStorage.getItem('texfin_company');
@@ -49,6 +68,7 @@ export const useStore = create<StoreState>((set) => {
     isOnline: navigator.onLine,
     syncStatus: 'idle',
     syncMessage: null,
+    confirmRequest: null,
 
     login: (token, user, company, financialYear, loginDate) => {
       sessionStorage.setItem('texfin_token', token);
@@ -95,6 +115,14 @@ export const useStore = create<StoreState>((set) => {
 
     clearNotifications: () => set({ notifications: [] }),
     setOnlineStatus: (isOnline) => set({ isOnline }),
-    setSyncStatus: (syncStatus, syncMessage = null) => set({ syncStatus, syncMessage })
+    setSyncStatus: (syncStatus, syncMessage = null) => set({ syncStatus, syncMessage }),
+
+    confirm: (options) => new Promise<boolean>((resolve) => {
+      set({ confirmRequest: { ...options, resolve } });
+    }),
+    resolveConfirm: (ok) => {
+      get().confirmRequest?.resolve(ok);
+      set({ confirmRequest: null });
+    }
   };
 });

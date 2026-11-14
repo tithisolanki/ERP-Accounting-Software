@@ -11,7 +11,7 @@ import { LookupService, TransactionsService, AccountService } from '../../servic
 import { Plus, Save, X, Edit3, Trash2, Search, Printer, LogOut, FileText, ClipboardList, ShoppingCart } from 'lucide-react';
 
 export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' }> = ({ initialType = 'challan' }) => {
-  const { token, addNotification, financialYear, loginDate } = useStore();
+  const { token, addNotification, financialYear, loginDate, confirm } = useStore();
   const [activeType, setActiveType] = useState<'purchase' | 'sale' | 'challan'>(initialType);
 
   // Vouchers mode: 'new' | 'view' | 'edit'
@@ -43,7 +43,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
   const [creditDays, setCreditDays] = useState(0);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [brokerName, setBrokerName] = useState('');
-  const [baleNo, setBaleNo] = useState('565*5');
+  const [baleNo, setBaleNo] = useState('');
   const [orderNo, setOrderNo] = useState('');
   const [orderDate, setOrderDate] = useState(loginDate);
   const [salesType, setSalesType] = useState('Finish Sales');
@@ -124,7 +124,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
 
   useEffect(() => {
   if (mode === 'new') {
-    setBaleNo('565*5');
+    setBaleNo('');
   }
 }, [mode]);
 
@@ -283,7 +283,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
 
   const handleEnquiry = async () => {
     if (!docNumber) {
-      alert('Please enter a document number to query.');
+      addNotification('error', 'Please enter a document number to query.');
       return;
     }
 
@@ -294,7 +294,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
       loadVoucherIntoForm(data);
       addNotification('success', `${activeType.toUpperCase()} voucher ${docNumber} loaded.`);
     } catch (err: any) {
-      alert(err.message);
+      addNotification('error', err.message);
     }
   };
 
@@ -425,7 +425,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
 
   const handleFetchChallan = async () => {
     if (!challanNo) {
-      alert('Please enter a Challan number to fetch.');
+      addNotification('error', 'Please enter a Challan number to fetch.');
       return;
     }
     try {
@@ -482,21 +482,21 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
       }
       addNotification('success', `Details for Challan No. ${challanNo} successfully fetched!`);
     } catch (err: any) {
-      alert(err.message);
+      addNotification('error', err.message);
     }
   };
 
   const handleAddOrUpdateItem = () => {
     if (!currentItem.qualityId) {
-      alert('Please select a Quality.');
+      addNotification('error', 'Please select a Quality.');
       return;
     }
     if (!currentItem.descriptionName?.trim()) {
-      alert('Please enter a Description.');
+      addNotification('error', 'Please enter a Description.');
       return;
     }
     if (!currentItem.hsnCode?.trim()) {
-      alert('Please enter an HSN Code.');
+      addNotification('error', 'Please enter an HSN Code.');
       return;
     }
 
@@ -563,8 +563,8 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
     setCurrentItem(items[index]);
   };
 
-  const handleDeleteItem = (index: number) => {
-    if (confirm('Are you sure you want to delete this item?')) {
+  const handleDeleteItem = async (index: number) => {
+    if (await confirm({ message: 'Are you sure you want to delete this item?', danger: true, confirmLabel: 'Delete' })) {
       const updated = items.filter((_, i) => i !== index);
       setItems(updated);
       if (editingIndex === index) {
@@ -693,21 +693,21 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
 
   const handleModify = () => {
     if (!activeId) {
-      alert('Load a record first by typing the number and clicking Enquiry.');
+      addNotification('error', 'Load a record first by typing the number and clicking Enquiry.');
       return;
     }
     setMode('edit');
   };
 
-  const handleCancel = () => {
-    if (confirm('Discard edits and reset form?')) {
+  const handleCancel = async () => {
+    if (await confirm({ message: 'Discard edits and reset form?' })) {
       handleNew();
     }
   };
 
   const handleDelete = async () => {
     if (!activeId) {
-      alert('Load a record first.');
+      addNotification('error', 'Load a record first.');
       return;
     }
 
@@ -715,7 +715,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
     if (activeType === 'purchase') docTypeName = 'bill';
     else if (activeType === 'challan') docTypeName = 'challan';
 
-    if (!confirm(`Are you sure you want to delete ${docTypeName} ${docNumber}?`)) {
+    if (!(await confirm({ message: `Are you sure you want to delete ${docTypeName} ${docNumber}?`, danger: true, confirmLabel: 'Delete' }))) {
       return;
     }
 
@@ -725,13 +725,13 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
       addNotification('success', 'Document deleted successfully.');
       handleNew();
     } catch (err: any) {
-      alert(err.message);
+      addNotification('error', err.message);
     }
   };
 
   const handlePrint = () => {
     if (!activeId) {
-      alert('Load a saved transaction to print.');
+      addNotification('error', 'Load a saved transaction to print.');
       return;
     }
     if (activeType === 'challan') {
@@ -748,18 +748,18 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
 
     const activeCategoryId = getActiveCategoryId();
     if (!activeCategoryId) {
-      alert('Validation Error: Active Category ID is missing/empty. Please check categories master data.');
+      addNotification('error', 'Validation Error: Active Category ID is missing/empty. Please check categories master data.');
       return;
     }
     const invalidRow = items.find(item => !item.qualityId || !item.descriptionName?.trim() || !item.hsnCode?.trim());
     if (invalidRow) {
-      alert('Validation Error: Please select or enter all columns.');
+      addNotification('error', 'Validation Error: Please select or enter all columns.');
       return;
     }
 
     if (activeType === 'purchase' && (purchaseType === 'Grey Purchase' || (purchaseType === 'Dyeing Charges' && addLotNumber))) {
       if (!lotNumber) {
-        alert('Please enter a Lot Number in the header.');
+        addNotification('error', 'Please enter a Lot Number in the header.');
         return;
       }
     }
@@ -869,7 +869,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
       fetchCreditAccounts();
       handleNew();
     } catch (err: any) {
-      alert('Save failed: ' + err.message);
+      addNotification('error', 'Save failed: ' + err.message);
     }
   };
 
@@ -879,7 +879,7 @@ export const Vouchers: React.FC<{ initialType?: 'purchase' | 'sale' | 'challan' 
       setRecentVouchers(data.slice(0, 50));
       setSearchModalOpen(true);
     } catch (err) {
-      alert('Search fail: ' + err);
+      addNotification('error', 'Search fail: ' + err);
     }
   };
 

@@ -129,7 +129,7 @@ export const CashVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
         <h1 className="text-sm font-bold text-slate-800 tracking-tight">
           {type === 'payment' ? 'Cash Payment Voucher' : 'Cash Receipt Voucher'}
         </h1>
-        <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+        <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
           {type === 'payment' ? 'Record cash payments issued from Cash In Hand' : 'Record cash receipts received into Cash In Hand'}
         </p>
       </div>

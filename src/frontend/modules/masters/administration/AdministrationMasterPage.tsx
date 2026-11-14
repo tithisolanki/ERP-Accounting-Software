@@ -24,7 +24,7 @@ type AdminItemFormValues = z.infer<typeof AdminItemSchema>;
 export const AdministrationMasterPage: React.FC<AdministrationMasterPageProps> = ({
   activeTab
 }) => {
-  const { token, addNotification, user } = useStore();
+  const { token, addNotification, user, confirm } = useStore();
   const [items, setItems] = useState<StandardMasterItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -88,7 +88,7 @@ export const AdministrationMasterPage: React.FC<AdministrationMasterPageProps> =
       addNotification('error', 'Standard users cannot modify master entries.');
       return;
     }
-    if (!window.confirm(`Are you sure you want to delete this ${labels.cleanLabel.toLowerCase()}? This cannot be undone.`)) {
+    if (!(await confirm({ message: `Are you sure you want to delete this ${labels.cleanLabel.toLowerCase()}? This cannot be undone.`, danger: true, confirmLabel: 'Delete' }))) {
       return;
     }
     try {

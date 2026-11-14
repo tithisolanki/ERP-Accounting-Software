@@ -28,7 +28,7 @@ interface GroupItem {
 }
 
 export const GroupMasterPage: React.FC = () => {
-  const { token, addNotification, user } = useStore();
+  const { token, addNotification, user, confirm } = useStore();
 
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [templates, setTemplates] = useState<PrimaryGroup[]>([]);
@@ -191,7 +191,7 @@ export const GroupMasterPage: React.FC = () => {
     const selected = getSelectedGroup();
     if (!selected) return;
 
-    if (!window.confirm(`Delete Group?\n\nGroup: ${selected.name}\n\nThis action cannot be undone.`)) {
+    if (!(await confirm({ title: 'Delete Group?', message: `Group: ${selected.name}\n\nThis action cannot be undone.`, danger: true, confirmLabel: 'Delete' }))) {
       return;
     }
 

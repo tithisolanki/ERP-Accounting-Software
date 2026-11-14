@@ -25,7 +25,7 @@ export const searchTargets: SearchTarget[] = [
 
 export const navItems = [
   { id: null, name: 'Home' },
-  { id: 'masters', name: 'Master' },
+  { id: 'masters', name: 'Masters' },
   { id: 'vouchers', name: 'Data Entry' },
   { id: 'registers', name: 'Registers' },
   { id: 'reports', name: 'Reports' },

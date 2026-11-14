@@ -25,7 +25,7 @@ interface BankVoucherLine {
 }
 
 export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }) => {
-  const { token, addNotification, loginDate } = useStore();
+  const { token, addNotification, loginDate, confirm } = useStore();
 
   // Form states
   const [voucherDate, setVoucherDate] = useState(loginDate);
@@ -245,7 +245,7 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
   const handleDeleteVoucher = async () => {
     if (!activeId) return;
 
-    if (!confirm(`Are you sure you want to delete Voucher No. ${activeId}?`)) {
+    if (!(await confirm({ message: `Are you sure you want to delete Voucher No. ${activeId}?`, danger: true, confirmLabel: 'Delete' }))) {
       return;
     }
 
@@ -266,7 +266,7 @@ export const BankVouchers: React.FC<{ type: 'payment' | 'receipt' }> = ({ type }
           <h1 className="text-sm font-bold text-slate-800 tracking-tight">
             {type === 'payment' ? 'Bank Payment Voucher' : 'Bank Receipt Voucher'}
           </h1>
-          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+          <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
             {type === 'payment' ? 'Record payments issued from your bank accounts' : 'Record payments received into your bank accounts'}
           </p>
         </div>

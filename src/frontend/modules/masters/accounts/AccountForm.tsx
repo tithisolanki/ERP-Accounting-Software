@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useStore } from '../../../store/useStore';
 import { useAccountForm } from './hooks/useAccountForm';
 import { AccountFormValues } from './AccountTypes';
 import {
@@ -50,6 +51,7 @@ export const AccountForm: React.FC<AccountFormProps> = ({
     watch,
     formState: { errors, isDirty }
   } = useAccountForm(initialValues);
+  const { confirm } = useStore();
 
   const selectedGroup = watch('group_name');
 
@@ -80,9 +82,9 @@ export const AccountForm: React.FC<AccountFormProps> = ({
     );
   }, [activeConfig]);
 
-  const handleCancelClick = () => {
+  const handleCancelClick = async () => {
     if (isDirty) {
-      if (!window.confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+      if (!(await confirm({ message: 'You have unsaved changes. Are you sure you want to discard them?' }))) {
         return;
       }
     }

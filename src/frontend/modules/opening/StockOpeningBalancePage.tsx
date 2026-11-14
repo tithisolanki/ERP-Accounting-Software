@@ -9,7 +9,7 @@ import { Quality, StockOpeningBalance } from '@shared/types';
 import { Trash2, Edit2, Save, X } from 'lucide-react';
 
 export const StockOpeningBalancePage: React.FC = () => {
-  const { token, addNotification } = useStore();
+  const { token, addNotification, confirm } = useStore();
 
   const [qualities, setQualities] = useState<Quality[]>([]);
   const [stockBalances, setStockBalances] = useState<StockOpeningBalance[]>([]);
@@ -101,7 +101,7 @@ export const StockOpeningBalancePage: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (!token) return;
-    if (!window.confirm('Are you sure you want to delete this stock opening balance?')) return;
+    if (!(await confirm({ message: 'Are you sure you want to delete this stock opening balance?', danger: true, confirmLabel: 'Delete' }))) return;
 
     try {
       await OpeningService.deleteStockBalance(id, token);

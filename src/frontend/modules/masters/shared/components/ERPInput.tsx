@@ -22,7 +22,7 @@ export const ERPInput = forwardRef<HTMLInputElement, ERPInputProps>(
           {...props}
         />
         {error && <span className="text-[11px] text-red-550 font-bold">{error}</span>}
-        {!error && helperText && <span className="text-[11px] text-slate-400 font-medium">{helperText}</span>}
+        {!error && helperText && <span className="text-[12px] text-slate-500 font-medium">{helperText}</span>}
       </div>
     );
   }

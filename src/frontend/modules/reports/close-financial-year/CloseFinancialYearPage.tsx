@@ -6,7 +6,7 @@ import { Button } from '../../../components/Button';
 import { Lock } from 'lucide-react';
 
 export const CloseFinancialYearPage: React.FC = () => {
-  const { token, financialYear, addNotification } = useStore();
+  const { token, financialYear, addNotification, confirm } = useStore();
   const [closing, setClosing] = useState(false);
   const [result, setResult] = useState<{
     voucherNo: string; netProfitLoss: number;
@@ -20,7 +20,13 @@ export const CloseFinancialYearPage: React.FC = () => {
 
   const handleClose = async () => {
     if (!token) return;
-    if (!window.confirm(`This will post a Books Closing journal voucher for FY ${financialYear}. Continue?`)) return;
+    if (!(await confirm({
+      title: 'Close Financial Year',
+      message: `This will post an irreversible Books Closing journal voucher for FY ${financialYear}. This cannot be undone.`,
+      danger: true,
+      confirmLabel: 'Close Year',
+      requireText: financialYear
+    }))) return;
 
     setClosing(true);
     try {

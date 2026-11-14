@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '../../../components/Modal';
+import { useStore } from '../../../store/useStore';
 import { Save, Trash2, Play } from 'lucide-react';
 
 interface PieceRow {
@@ -24,6 +25,7 @@ export const PieceMetersModal: React.FC<PieceMetersModalProps> = ({
   mode,
   handleSavePieceMeters
 }) => {
+  const { addNotification } = useStore();
   const [rows, setRows] = useState<PieceRow[]>([]);
   const [pcsInput, setPcsInput] = useState('1');
   const [metersInput, setMetersInput] = useState('');
@@ -45,7 +47,7 @@ export const PieceMetersModal: React.FC<PieceMetersModalProps> = ({
     const pcs = parseInt(pcsInput, 10);
     const meters = parseFloat(metersInput);
     if (isNaN(pcs) || pcs <= 0 || isNaN(meters) || meters <= 0) {
-      alert('Please enter valid positive numbers for PCS and METERS.');
+      addNotification('error', 'Please enter valid positive numbers for PCS and METERS.');
       return;
     }
     setRows([...rows, { pcs, meters }]);

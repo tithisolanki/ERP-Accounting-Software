@@ -46,7 +46,7 @@ export const Home: React.FC = () => {
         <h1 className="text-sm font-bold text-slate-800 tracking-tight">
           Welcome{company?.name ? `, ${company.name}` : ''}
         </h1>
-        <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+        <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
           Today's business summary at a glance
         </p>
       </div>
@@ -66,7 +66,7 @@ export const Home: React.FC = () => {
                   <stat.icon className="w-4.5 h-4.5" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{stat.label}</p>
+                  <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">{stat.label}</p>
                   <p className="text-lg font-black text-slate-800 font-mono tracking-tight mt-0.5">{stat.value}</p>
                 </div>
               </div>

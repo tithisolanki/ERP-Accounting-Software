@@ -194,7 +194,7 @@ export const TrialBalancePage: React.FC = () => {
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
         <div>
           <h1 className="text-sm font-bold text-slate-800 tracking-tight">Trial Balance</h1>
-          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+          <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
             Audit debit & credit accounting balances equality
           </p>
         </div>
@@ -341,7 +341,7 @@ export const TrialBalancePage: React.FC = () => {
             {/* Header info */}
             <div className="text-center mb-6">
               <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight leading-none mb-1">
-                {company?.name || 'TexFin Administration'}
+                {company?.name || ''}
               </h2>
               {company?.address && (
                 <p className="text-[11px] text-slate-550 font-bold uppercase tracking-wider leading-none mb-1">

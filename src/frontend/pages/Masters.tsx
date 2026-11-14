@@ -13,6 +13,25 @@ interface MastersProps {
   onChangeSubTab?: (tab: string) => void;
 }
 
+// Page-title banner text per sub-tab, matching the pattern every other top-level section
+// (Registers, Reports, Settings...) already uses so "where am I" is visible here too.
+// Title only - every sub-page below already shows its own subtitle in its Card header,
+// so repeating one here just duplicated it.
+const TITLES: Record<string, string> = {
+  accounts: 'Accounts Master',
+  groups: 'Account Groups',
+  companies: 'Company Profiles',
+  categories: 'Stock Categories',
+  qualities: 'Fabric Qualities',
+  descriptions: 'Descriptions Master',
+  'hsn-codes': 'HSN & GST Mappings',
+  brokers: 'Brokers Master',
+  cities: 'Cities Register',
+  states: 'States Directory',
+  transports: 'Transporters Master',
+  'journal-voucher-types': 'Journal Voucher Types'
+};
+
 export const Masters: React.FC<MastersProps> = ({ activeSubTab }) => {
   const [activeTab, setActiveTab] = useState<string>(activeSubTab || 'accounts');
 
@@ -22,6 +41,7 @@ export const Masters: React.FC<MastersProps> = ({ activeSubTab }) => {
     }
   }, [activeSubTab]);
 
+  const title = TITLES[activeTab] || TITLES.accounts;
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -51,8 +71,12 @@ export const Masters: React.FC<MastersProps> = ({ activeSubTab }) => {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 min-h-[620px]">
+    <div className="flex flex-col gap-5 min-h-[620px]">
 
+      {/* Top Header Navigation Panel (matches Registers/Reports/Settings) */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+        <h1 className="text-sm font-bold text-slate-800 tracking-tight">{title}</h1>
+      </div>
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto">

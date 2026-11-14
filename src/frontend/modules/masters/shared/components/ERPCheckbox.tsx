@@ -23,7 +23,7 @@ export const ERPCheckbox = forwardRef<HTMLInputElement, ERPCheckboxProps>(
           />
           <div className="flex flex-col">
             <span className="font-semibold text-xs text-slate-800">{label}</span>
-            {subLabel && <span className="text-[11px] text-slate-400 font-medium">{subLabel}</span>}
+            {subLabel && <span className="text-[12px] text-slate-500 font-medium">{subLabel}</span>}
           </div>
         </label>
         {error && <span className="text-[11px] text-red-550 font-bold">{error}</span>}

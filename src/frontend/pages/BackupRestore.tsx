@@ -7,7 +7,7 @@ import { SettingsService } from '../services/api';
 import { Download, Upload, Cloud, Save, Wifi, WifiOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export const BackupRestore: React.FC = () => {
-  const { token, addNotification, company, isOnline, syncStatus, syncMessage, setSyncStatus } = useStore();
+  const { token, addNotification, company, isOnline, syncStatus, syncMessage, setSyncStatus, confirm } = useStore();
   const [restoring, setRestoring] = useState(false);
 
   // Supabase state
@@ -116,7 +116,13 @@ export const BackupRestore: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!confirm('WARNING: Restoring the database will overwrite all your current offline transactions and log you out. Proceed?')) {
+    if (!(await confirm({
+      title: 'Restore Database',
+      message: 'WARNING: Restoring will overwrite all your current offline transactions and log you out. This cannot be undone.',
+      danger: true,
+      confirmLabel: 'Restore',
+      requireText: 'RESTORE'
+    }))) {
       e.target.value = '';
       return;
     }
@@ -155,7 +161,7 @@ export const BackupRestore: React.FC = () => {
       {/* Title */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
         <h1 className="text-sm font-bold text-slate-800 tracking-tight">Database Backup, Restore & Sync</h1>
-        <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Secure your accounting logs via cloud synchronization and archives</p>
+        <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Secure your accounting logs via cloud synchronization and archives</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">

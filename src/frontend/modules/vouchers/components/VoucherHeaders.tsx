@@ -334,7 +334,7 @@ export const VoucherHeaders: React.FC<VoucherHeadersProps> = ({
           {/* Sales or Purchase Type (Radio Button Group) */}
           {(activeType === 'sale' || activeType === 'challan') && (
             <div className="flex flex-col gap-1.5 border border-slate-150 p-2.5 rounded-lg bg-slate-50/50 justify-center h-14 mt-1">
-              <span className="font-bold text-slate-400 text-[11px] uppercase tracking-wider mb-1 leading-none">Sales Category</span>
+              <span className="font-bold text-slate-500 text-[12px] uppercase tracking-wider mb-1 leading-none">Sales Category</span>
               <div className="flex gap-4">
                 {categories.filter(c => c.is_active !== 0).map((cat) => {
                   const displayName = cat.name.charAt(0).toUpperCase() + cat.name.slice(1).toLowerCase();
@@ -359,7 +359,7 @@ export const VoucherHeaders: React.FC<VoucherHeadersProps> = ({
 
           {activeType === 'purchase' && (
             <div className="flex flex-col gap-1.5 border border-slate-150 p-2.5 rounded-lg bg-slate-50/50 justify-center min-h-[64px] mt-1">
-              <label className="font-bold text-slate-400 text-[11px] uppercase tracking-wider leading-none mb-1.5">Purchase Type</label>
+              <label className="font-bold text-slate-500 text-[12px] uppercase tracking-wider leading-none mb-1.5">Purchase Type</label>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] font-bold text-slate-600">
                 <label className="flex items-center gap-1.5 select-none cursor-pointer">
                   <input

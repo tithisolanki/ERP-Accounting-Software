@@ -9,7 +9,7 @@ import { Account } from '@shared/types';
 import { Search, Trash2, Edit2, Save, X } from 'lucide-react';
 
 export const AccountOpeningBalancePage: React.FC = () => {
-  const { token, addNotification } = useStore();
+  const { token, addNotification, confirm } = useStore();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [balances, setBalances] = useState<Account[]>([]);
@@ -84,7 +84,7 @@ export const AccountOpeningBalancePage: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (!token) return;
-    if (!window.confirm('Are you sure you want to delete this opening balance?')) return;
+    if (!(await confirm({ message: 'Are you sure you want to delete this opening balance?', danger: true, confirmLabel: 'Delete' }))) return;
 
     try {
       await OpeningService.deleteAccountBalance(id, token);

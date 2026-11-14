@@ -16,7 +16,7 @@ interface JournalVoucherLine {
 }
 
 export const JournalVouchers: React.FC = () => {
-  const { token, addNotification, loginDate } = useStore();
+  const { token, addNotification, loginDate, confirm } = useStore();
 
   // Form states
   const [voucherDate, setVoucherDate] = useState(loginDate);
@@ -258,7 +258,7 @@ export const JournalVouchers: React.FC = () => {
   const handleDeleteVoucher = async () => {
     if (!activeId) return;
 
-    if (!confirm(`Are you sure you want to delete Journal Voucher No. ${activeId}?`)) {
+    if (!(await confirm({ message: `Are you sure you want to delete Journal Voucher No. ${activeId}?`, danger: true, confirmLabel: 'Delete' }))) {
       return;
     }
 
@@ -281,7 +281,7 @@ export const JournalVouchers: React.FC = () => {
           <h1 className="text-sm font-bold text-slate-800 tracking-tight">
             Journal Voucher Entry
           </h1>
-          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+          <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
             Add / Modify / Delete Double-Entry Journal Voucher Logs
           </p>
         </div>
