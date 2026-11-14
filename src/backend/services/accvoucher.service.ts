@@ -286,10 +286,11 @@ export class AccVoucherService {
    * Print Allocation (R20): AC_PLUS's ADEBALOCPRNT/ACREALOCPRNT -- a multi-account, date-ranged
    * batch print. Confirmed from a real printed sample ("creditor allocation.pdf") to combine
    * every bill-settling voucher for the account (ordinary receipts/payments from R7, plus R20's
-   * own standalone Allocation Entries), continuously paginated across all selected accounts
-   * (no per-account page reset, unlike Party Ledger), with a running subtotal per account.
-   * AC_PLUS's real sample also includes Credit/Debit Notes and bill-linked Journal Vouchers --
-   * TexFin doesn't model bill-wise linkage for those yet (R3, unbuilt), so they're left out here.
+   * own standalone Allocation Entries, plus Sales/Purchase Returns), continuously paginated
+   * across all selected accounts (no per-account page reset, unlike Party Ledger), with a
+   * running subtotal per account. AC_PLUS's real sample also includes Credit/Debit Notes and
+   * bill-linked Journal Vouchers -- TexFin doesn't model bill-wise linkage for those yet, so
+   * they're left out here.
    */
   async getAllocationPrintPdf(
     companyId: string, side: 'debtor' | 'creditor', accountIds: string[], startDate: string, endDate: string
@@ -321,6 +322,7 @@ export class AccVoucherService {
         const mode = r.voucherLabel || 'Cash';
         return `${mode} ${r.voucherKind === 'receipt' ? 'Receipt' : 'Payment'}`;
       }
+      if (r.voucherKind === 'sales_return' || r.voucherKind === 'purchase_return') return r.voucherLabel;
       return r.voucherKind === 'kasar' ? 'Kasar' : 'On Account';
     };
     const voucherNoOf = (r: any) => {

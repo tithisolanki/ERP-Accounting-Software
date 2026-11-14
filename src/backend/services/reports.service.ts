@@ -180,16 +180,19 @@ export class ReportsService {
       .map(b => {
         const dueDate = new Date(b.dueDate);
         const overdueDays = Math.floor((asOf - dueDate.getTime()) / 86400000);
+        // A return reduces what's actually owed on the bill regardless of which payment-date
+        // bucket it'd otherwise fall into -- it isn't a "paid on time vs late" event, so it's
+        // subtracted from totalAmount up front, the same way getOutstandingBills already does.
         const principal = includeEarlyPayments
-          ? b.totalAmount - b.paidBeforeDue - b.paidOnOrAfterDue
-          : b.totalAmount - b.paidOnOrAfterDue;
+          ? b.totalAmount - b.returned - b.paidBeforeDue - b.paidOnOrAfterDue
+          : b.totalAmount - b.returned - b.paidOnOrAfterDue;
         const interest = Math.round(Math.max(principal, 0) * (interestRatePercent / 100) * overdueDays / maxDaysOfYear * 100) / 100;
         return { ...b, overdueDays, principal, interest };
       })
-      // A bill already fully settled by payments made BEFORE its own due date never genuinely
-      // went into arrears -- exclude it regardless of includeEarlyPayments, which only decides
-      // the interest-bearing principal for bills that really were still owed past due.
-      .filter(b => b.overdueDays > 0 && (b.totalAmount - b.paidBeforeDue) > 0.005);
+      // A bill already fully settled by payments made BEFORE its own due date (or by a return)
+      // never genuinely went into arrears -- exclude it regardless of includeEarlyPayments, which
+      // only decides the interest-bearing principal for bills that really were still owed past due.
+      .filter(b => b.overdueDays > 0 && (b.totalAmount - b.returned - b.paidBeforeDue) > 0.005);
 
     const groups = new Map<string, { groupName: string; bills: any[] }>();
     for (const bill of withInterest) {
