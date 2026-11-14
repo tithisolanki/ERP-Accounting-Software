@@ -212,14 +212,27 @@ export const AllocationEntryPage: React.FC<{ side: 'debtor' | 'creditor' }> = ({
             </div>
           )}
 
-          <div className="flex justify-end gap-3 border-t border-slate-100 pt-4 mt-2">
-            <Button type="button" variant="secondary" onClick={handleClear} className="font-bold cursor-pointer">Cancel / New</Button>
-            <Button type="button" variant="primary" onClick={handleSave}
-              disabled={!accountId || !entryNo || !(Number(amount) > 0) || Math.abs(totalApplied - Number(amount || 0)) > 0.01 || (entryType === 'kasar' && !kasarAccountId)}
-              className="font-bold cursor-pointer">
-              <Save className="w-4 h-4 mr-1.5" /> Save Allocation Entry
-            </Button>
-          </div>
+          {(() => {
+            const reason = !accountId ? 'Select an account first.'
+              : !entryNo ? 'Entry No. is required.'
+              : !(Number(amount) > 0) ? 'Enter an Amount greater than 0.'
+              : entryType === 'kasar' && !kasarAccountId ? 'Select a Kasar/Discount account.'
+              : bills.length === 0 ? 'This account has no outstanding bills to adjust against.'
+              : Math.abs(totalApplied - Number(amount || 0)) > 0.01
+                ? `Bill lines total ${formatCurrency(totalApplied)} must equal the Amount ${formatCurrency(Number(amount || 0))} -- fill in the Adjusted Amount cell(s) above.`
+              : null;
+            return (
+              <div className="flex justify-between items-center gap-3 border-t border-slate-100 pt-4 mt-2">
+                <span className="text-rose-600 font-semibold">{reason}</span>
+                <div className="flex gap-3">
+                  <Button type="button" variant="secondary" onClick={handleClear} className="font-bold cursor-pointer">Cancel / New</Button>
+                  <Button type="button" variant="primary" onClick={handleSave} disabled={!!reason} className="font-bold cursor-pointer">
+                    <Save className="w-4 h-4 mr-1.5" /> Save Allocation Entry
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </Card>
 
