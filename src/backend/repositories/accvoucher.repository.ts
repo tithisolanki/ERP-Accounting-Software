@@ -162,18 +162,22 @@ export class AccVoucherRepository {
       `SELECT p.id AS billId, 'purchase' AS billType, p.purchase_number AS billNumber, p.date,
               p.total_amount AS totalAmount,
               COALESCE(SUM(pa.amount_applied), 0) + COALESCE(SUM(pa.discount_amount), 0) + COALESCE(MAX(aeb.applied), 0) + COALESCE(MAX(aeb.discount), 0) AS allocated,
-              p.total_amount - COALESCE(SUM(pa.amount_applied), 0) - COALESCE(SUM(pa.discount_amount), 0) - COALESCE(MAX(aeb.applied), 0) - COALESCE(MAX(aeb.discount), 0) AS balanceDue
+              p.total_amount - COALESCE(SUM(pa.amount_applied), 0) - COALESCE(SUM(pa.discount_amount), 0) - COALESCE(MAX(aeb.applied), 0) - COALESCE(MAX(aeb.discount), 0) - COALESCE(MAX(pr.returned), 0) AS balanceDue
        FROM purchases p
        LEFT JOIN payment_allocations pa ON pa.purchase_id = p.id ${excludeClausePa}
        LEFT JOIN (
          SELECT bill_id, SUM(amount_applied) AS applied, SUM(discount_amount) AS discount
          FROM allocation_entry_bills WHERE bill_type = 'purchase' ${excludeAllocClause} GROUP BY bill_id
        ) aeb ON aeb.bill_id = p.id
+       LEFT JOIN (
+         SELECT against_purchase_id, SUM(total_amount) AS returned
+         FROM purchase_returns WHERE 1 = 1 ${excludeClauseSr} GROUP BY against_purchase_id
+       ) pr ON pr.against_purchase_id = p.id
        WHERE p.company_id = ? AND p.supplier_id = ?
        GROUP BY p.id
        ${havingClause}
        ORDER BY p.date`,
-      [...excludeLineIds, ...excludeAllocationEntryIds, companyId, accountId]
+      [...excludeLineIds, ...excludeAllocationEntryIds, ...excludeLineIds, companyId, accountId]
     );
     return [...sales, ...purchases].sort((a, b) => (a.date > b.date ? 1 : -1));
   }
