@@ -78,3 +78,84 @@ export const TransactionsService = {
     return res;
   }
 };
+
+export interface SalesReturnItemPayload {
+  categoryId: string;
+  qualityId: string;
+  descriptionId?: string | null;
+  descriptionName: string;
+  hsnId?: string | null;
+  hsnCode: string;
+  pcs?: number;
+  meters: number;
+  rate: number;
+  gstPercentage: number;
+}
+
+export interface SalesReturnPayload {
+  returnNumber: string;
+  date: string;
+  customerId: string;
+  financialYear: string;
+  againstSaleId: string;
+  againstBillDate: string;
+  returnType: string;
+  brokerName?: string;
+  challanNumber?: string;
+  challanDate?: string;
+  lrNumber?: string;
+  lrDate?: string;
+  remark?: string;
+  confirmOverage?: boolean;
+  items: SalesReturnItemPayload[];
+}
+
+/** Thrown when POST/PUT /api/transactions/sales-returns answers 409 -- the return would take
+ * the bill's remaining balance negative. Carries the bill's own balanceDue so the page can show
+ * it in a confirm dialog, then resubmit with confirmOverage: true. */
+export class OverReturnApiError extends Error {
+  balanceDue: number;
+  constructor(message: string, balanceDue: number) {
+    super(message);
+    this.name = 'OverReturnApiError';
+    this.balanceDue = balanceDue;
+  }
+}
+
+async function saveSalesReturn(method: 'POST' | 'PUT', path: string, payload: SalesReturnPayload, token: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: getHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 409 && typeof data.balanceDue === 'number') {
+      throw new OverReturnApiError(data.error || "Return total exceeds the bill's remaining balance.", data.balanceDue);
+    }
+    throw new Error(data.error || `Request failed: ${path}`);
+  }
+  return data;
+}
+
+export const SalesReturnService = {
+  async getAll(token: string): Promise<any[]> {
+    return apiFetch('/api/transactions/sales-returns', token);
+  },
+
+  async getNextNumber(token: string, financialYear: string): Promise<{ nextNumber: number | string }> {
+    return apiFetch(`/api/transactions/sales-returns/next-number?fy=${encodeURIComponent(financialYear)}`, token);
+  },
+
+  async create(payload: SalesReturnPayload, token: string): Promise<{ success: boolean }> {
+    return saveSalesReturn('POST', '/api/transactions/sales-returns', payload, token);
+  },
+
+  async update(id: string, payload: SalesReturnPayload, token: string): Promise<{ success: boolean }> {
+    return saveSalesReturn('PUT', `/api/transactions/sales-returns/${id}`, payload, token);
+  },
+
+  async delete(id: string, token: string): Promise<void> {
+    await apiFetch(`/api/transactions/sales-returns/${id}`, token, { method: 'DELETE' });
+  }
+};

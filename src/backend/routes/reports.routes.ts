@@ -45,6 +45,11 @@ router.get('/gst', authenticateJWT, (req, res) => reportsController.getGstReport
 router.get('/invoice-pdf/:salesId', authenticateJWT, (req, res) => reportsController.getInvoicePdf(req, res));
 
 // ==========================================
+// 4c. Generate Sales Return (Goods Credit Note) PDF
+// ==========================================
+router.get('/sales-return-pdf/:id', authenticateJWT, (req, res) => reportsController.getSalesReturnPdf(req, res));
+
+// ==========================================
 // 4b. Generate Challan PDF
 // ==========================================
 router.get('/challan-pdf/:challanId', authenticateJWT, (req, res) => reportsController.getChallanPdf(req, res));
