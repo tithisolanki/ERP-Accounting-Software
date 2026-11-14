@@ -291,7 +291,13 @@ export const SalesReturnPage: React.FC = () => {
       ? 'Every item row needs a Quality, Description and HSN Code.'
       : null;
 
-  const totalAmount = items.reduce((sum, item) => sum + (item.quantity || 0) * (item.rate || 0), 0);
+  // Mirrors the backend's calculateItemTotals (taxable + taxable*gst%/100) so this figure --
+  // shown here and in the over-return confirm dialog -- matches what's actually compared
+  // against the bill's balanceDue server-side.
+  const totalAmount = items.reduce((sum, item) => {
+    const taxable = (item.quantity || 0) * (item.rate || 0);
+    return sum + taxable + (taxable * (item.gstPercentage || 0)) / 100;
+  }, 0);
 
   return (
     <div className="flex flex-col gap-5 select-none text-xs max-w-6xl">
