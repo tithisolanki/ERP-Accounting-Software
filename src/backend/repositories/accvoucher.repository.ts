@@ -202,7 +202,7 @@ export class AccVoucherRepository {
               s.total_amount AS totalAmount, a.id AS accountId, a.name AS accountName,
               COALESCE(NULLIF(s.broker_name, ''), a.broker) AS broker, s.credit_days,
               s.total_amount - COALESCE(SUM(CASE WHEN rcpt.date <= ? THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0)
-                - COALESCE(MAX(aeb.applied), 0) - COALESCE(MAX(aeb.discount), 0) AS balanceDue
+                - COALESCE(MAX(aeb.applied), 0) - COALESCE(MAX(aeb.discount), 0) - COALESCE(MAX(sr.returned), 0) AS balanceDue
        FROM sales s
        JOIN accounts a ON a.id = s.customer_id
        LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id
@@ -213,6 +213,10 @@ export class AccVoucherRepository {
          JOIN allocation_entries ae ON ae.id = aeb.allocation_entry_id
          WHERE aeb.bill_type = 'sale' AND ae.date <= ? GROUP BY aeb.bill_id
        ) aeb ON aeb.bill_id = s.id
+       LEFT JOIN (
+         SELECT against_sale_id, SUM(total_amount) AS returned
+         FROM sales_returns WHERE date <= ? GROUP BY against_sale_id
+       ) sr ON sr.against_sale_id = s.id
        WHERE (? IS NULL OR s.company_id = ?) AND s.customer_id IN (${placeholders}) AND s.date <= ?
          AND (? IS NULL OR LOWER(TRIM(a.state)) = LOWER(TRIM(?))) AND (? IS NULL OR LOWER(TRIM(a.city)) = LOWER(TRIM(?)))
          AND (? IS NULL OR LOWER(TRIM(COALESCE(NULLIF(s.broker_name, ''), a.broker))) = LOWER(TRIM(?)))
@@ -220,7 +224,7 @@ export class AccVoucherRepository {
        HAVING ? = 1 OR balanceDue > 0.005
        ORDER BY s.date`,
       [
-        paymentUpto, paymentUpto, companyId, companyId, ...accountIds, asOfDate,
+        paymentUpto, paymentUpto, paymentUpto, companyId, companyId, ...accountIds, asOfDate,
         state || null, state || null, city || null, city || null, broker || null, broker || null,
         includingPaidBills ? 1 : 0
       ]
@@ -245,7 +249,8 @@ export class AccVoucherRepository {
               COALESCE(SUM(CASE WHEN rcpt.date BETWEEN ? AND ? AND rcpt.date < date(s.date, COALESCE(s.credit_days, 0) || ' days') THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0)
                 + COALESCE(MAX(aeb.beforeDue), 0) AS paidBeforeDue,
               COALESCE(SUM(CASE WHEN rcpt.date BETWEEN ? AND ? AND rcpt.date >= date(s.date, COALESCE(s.credit_days, 0) || ' days') THEN ra.amount_applied + ra.discount_amount ELSE 0 END), 0)
-                + COALESCE(MAX(aeb.onOrAfterDue), 0) AS paidOnOrAfterDue
+                + COALESCE(MAX(aeb.onOrAfterDue), 0) AS paidOnOrAfterDue,
+              COALESCE(MAX(sr.returned), 0) AS returned
        FROM sales s
        JOIN accounts a ON a.id = s.customer_id
        LEFT JOIN receipt_allocations ra ON ra.sale_id = s.id
@@ -260,10 +265,14 @@ export class AccVoucherRepository {
          WHERE aeb.bill_type = 'sale'
          GROUP BY aeb.bill_id
        ) aeb ON aeb.bill_id = s.id
+       LEFT JOIN (
+         SELECT against_sale_id, SUM(total_amount) AS returned
+         FROM sales_returns WHERE date <= ? GROUP BY against_sale_id
+       ) sr ON sr.against_sale_id = s.id
        WHERE s.company_id = ? AND s.customer_id IN (${placeholders}) AND s.date <= ?
        GROUP BY s.id
        ORDER BY s.date`,
-      [periodStart, periodEnd, periodStart, periodEnd, periodStart, periodEnd, periodStart, periodEnd, companyId, ...accountIds, reportDate]
+      [periodStart, periodEnd, periodStart, periodEnd, periodStart, periodEnd, periodStart, periodEnd, reportDate, companyId, ...accountIds, reportDate]
     );
   }
 
@@ -405,10 +414,11 @@ export class AccVoucherRepository {
    * Every bill-settling row for several accounts within a date range, for Print Allocation (R20)
    * -- AC_PLUS's ADEBALOCPRNT/ACREALOCPRNT, confirmed multi-account + date range via the live
    * binary, and confirmed via a real printed sample to combine BOTH sources that write into
-   * ADALO/ACALO: ordinary bill-wise receipts/payments (R7) AND standalone Allocation Entries
-   * (R20) -- not just this screen's own entries. AC_PLUS also includes Credit/Debit Notes and
-   * bill-linked Journal Vouchers in this report; TexFin doesn't model bill-wise linkage for
-   * those yet (R3, unbuilt), so they're not in this union -- a real but out-of-scope-for-now gap.
+   * ADALO/ACALO: ordinary bill-wise receipts/payments (R7), standalone Allocation Entries
+   * (R20), AND Sales/Purchase Returns (R3) -- not just this screen's own entries. AC_PLUS also
+   * includes Credit/Debit Notes and bill-linked Journal Vouchers in this report; TexFin doesn't
+   * model bill-wise linkage for those yet (that part of R3 is still unbuilt), so they're not in
+   * this union -- a real but out-of-scope-for-now gap.
    */
   async getAllocationHistoryForPrint(
     companyId: string, side: 'debtor' | 'creditor', accountIds: string[], startDate: string, endDate: string
@@ -440,8 +450,21 @@ export class AccVoucherRepository {
          JOIN sales s ON s.id = aeb.bill_id AND aeb.bill_type = 'sale'
          JOIN accounts a ON a.id = ae.account_id
          WHERE ae.company_id = ? AND ae.side = 'debtor' AND a.id IN (${placeholders}) AND ae.date BETWEEN ? AND ?
+         UNION ALL
+         SELECT a.id, a.name,
+                sr.id, 'sales_return', sr.date, 'Sales Return',
+                sr.total_amount, sr.return_number, NULL,
+                'sale', s.id, s.date, s.invoice_number, s.total_amount,
+                sr.total_amount
+         FROM sales_returns sr
+         JOIN sales s ON s.id = sr.against_sale_id
+         JOIN accounts a ON a.id = sr.customer_id
+         WHERE sr.company_id = ? AND a.id IN (${placeholders}) AND sr.date BETWEEN ? AND ?
          ORDER BY accountName, voucherDate, voucherId`,
-        [companyId, ...accountIds, startDate, endDate, companyId, ...accountIds, startDate, endDate]
+        [
+          companyId, ...accountIds, startDate, endDate, companyId, ...accountIds, startDate, endDate,
+          companyId, ...accountIds, startDate, endDate
+        ]
       );
     }
 
@@ -467,8 +490,21 @@ export class AccVoucherRepository {
        JOIN purchases p ON p.id = aeb.bill_id AND aeb.bill_type = 'purchase'
        JOIN accounts a ON a.id = ae.account_id
        WHERE ae.company_id = ? AND ae.side = 'creditor' AND a.id IN (${placeholders}) AND ae.date BETWEEN ? AND ?
+       UNION ALL
+       SELECT a.id, a.name,
+              pr.id, 'purchase_return', pr.date, 'Purchase Return',
+              pr.total_amount, pr.return_number, NULL,
+              'purchase', p.id, p.date, p.purchase_number, p.total_amount,
+              pr.total_amount
+       FROM purchase_returns pr
+       JOIN purchases p ON p.id = pr.against_purchase_id
+       JOIN accounts a ON a.id = pr.supplier_id
+       WHERE pr.company_id = ? AND a.id IN (${placeholders}) AND pr.date BETWEEN ? AND ?
        ORDER BY accountName, voucherDate, voucherId`,
-      [companyId, ...accountIds, startDate, endDate, companyId, ...accountIds, startDate, endDate]
+      [
+        companyId, ...accountIds, startDate, endDate, companyId, ...accountIds, startDate, endDate,
+        companyId, ...accountIds, startDate, endDate
+      ]
     );
   }
 
@@ -489,8 +525,12 @@ export class AccVoucherRepository {
            SELECT aeb.bill_id, ae.date, (aeb.amount_applied + aeb.discount_amount), '', ae.id
            FROM allocation_entry_bills aeb JOIN allocation_entries ae ON ae.id = aeb.allocation_entry_id
            WHERE aeb.company_id = ? AND aeb.bill_type = 'sale' AND aeb.bill_id IN (${placeholders})
+           UNION ALL
+           SELECT sr.against_sale_id, sr.date, sr.total_amount, '', sr.id
+           FROM sales_returns sr
+           WHERE sr.company_id = ? AND sr.against_sale_id IN (${placeholders})
          ) ORDER BY date, ord1, ord2`,
-        [companyId, ...billIds, companyId, ...billIds]
+        [companyId, ...billIds, companyId, ...billIds, companyId, ...billIds]
       );
     }
     return db.all(
@@ -502,8 +542,12 @@ export class AccVoucherRepository {
          SELECT aeb.bill_id, ae.date, (aeb.amount_applied + aeb.discount_amount), '', ae.id
          FROM allocation_entry_bills aeb JOIN allocation_entries ae ON ae.id = aeb.allocation_entry_id
          WHERE aeb.company_id = ? AND aeb.bill_type = 'purchase' AND aeb.bill_id IN (${placeholders})
+         UNION ALL
+         SELECT pr.against_purchase_id, pr.date, pr.total_amount, '', pr.id
+         FROM purchase_returns pr
+         WHERE pr.company_id = ? AND pr.against_purchase_id IN (${placeholders})
        ) ORDER BY date, ord1, ord2`,
-      [companyId, ...billIds, companyId, ...billIds]
+      [companyId, ...billIds, companyId, ...billIds, companyId, ...billIds]
     );
   }
 }

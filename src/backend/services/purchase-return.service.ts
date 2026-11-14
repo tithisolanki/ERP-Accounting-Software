@@ -29,6 +29,9 @@ async function buildPurchaseReturn(db: any, companyId: string, returnId: string,
   if (!againstPurchaseId || !againstBillDate || !returnType) {
     throw new Error('Against Bill No., Bill Date and Return Type are required.');
   }
+  if (returnType !== 'Grey' && returnType !== 'Finish') {
+    throw new Error("return_type must be 'Grey' or 'Finish'.");
+  }
   const returnNumberVal = parseDocNumber(returnNumber, 'Return number');
   const challanNumberVal = challanNumber ? parseDocNumber(challanNumber, 'Challan number') : null;
 

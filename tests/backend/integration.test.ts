@@ -1030,6 +1030,46 @@ async function runTests() {
       originalInvoiceRow !== salesReturnGstRow,
       JSON.stringify({ originalInvoiceRow, salesReturnGstRow }));
 
+    console.log('\nTest 26: Outstanding Ledger (getOutstandingBillsForAccounts) reflects Sales Returns, scoped by paymentUpto the same way receipts already are...');
+    const now26 = new Date().toISOString();
+    const outstandingReturnCustomerId = crypto.randomUUID();
+    await db.run(`INSERT INTO accounts (id, company_id, name, opening_balance, group_name, is_dirty, updated_at) VALUES (?, ?, 'Outstanding Return Test Account', 0, 'Sundry Debtors', 0, ?)`, [outstandingReturnCustomerId, company.id, now26]);
+    await salesService.createSale(company.id, actor, {
+      invoiceNumber: 9605, date: '2026-06-01', customerId: outstandingReturnCustomerId, financialYear: '2025-26',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 50, rate: 100, gstPercentage: 5 }]
+    });
+    const srSaleE = await db.get('SELECT id, total_amount, date FROM sales WHERE invoice_number = 9605 AND company_id = ?', [company.id]);
+    check('Sale E total = 5,250', srSaleE.total_amount === 5250, `got ${srSaleE.total_amount}`);
+
+    await salesReturnService.createSalesReturn(company.id, actor, {
+      returnNumber: 20, date: '2026-06-10', customerId: outstandingReturnCustomerId, financialYear: '2025-26',
+      againstSaleId: srSaleE.id, againstBillDate: srSaleE.date, returnType: 'Grey',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 10, rate: 100, gstPercentage: 5 }]
+    });
+
+    const ledgerBillsWithReturnInWindow = await accVoucherRepository.getOutstandingBillsForAccounts(company.id, [outstandingReturnCustomerId], '2026-12-31', '2026-12-31');
+    const ledgerBillE = ledgerBillsWithReturnInWindow.find((b: any) => b.billId === srSaleE.id);
+    check('getOutstandingBillsForAccounts subtracts the return\'s total_amount from balanceDue, same as getOutstandingBills (5250 - 1050 = 4200)',
+      ledgerBillE?.balanceDue === 4200, JSON.stringify(ledgerBillE));
+
+    const ledgerBillsBeforeReturnDate = await accVoucherRepository.getOutstandingBillsForAccounts(company.id, [outstandingReturnCustomerId], '2026-12-31', '2026-06-05');
+    const ledgerBillEBeforeReturn = ledgerBillsBeforeReturnDate.find((b: any) => b.billId === srSaleE.id);
+    check('A return dated after the report\'s paymentUpto cutoff is not yet subtracted, same semantics as a receipt (still 5250)',
+      ledgerBillEBeforeReturn?.balanceDue === 5250, JSON.stringify(ledgerBillEBeforeReturn));
+
+    console.log('\nTest 27: return_type is validated server-side against the Grey/Finish vocabulary...');
+    check('An invalid return_type is rejected before any DB write (sales return)', await rejects(() => salesReturnService.createSalesReturn(company.id, actor, {
+      returnNumber: 900, date: '2026-06-15', customerId: outstandingReturnCustomerId, financialYear: '2025-26',
+      againstSaleId: srSaleE.id, againstBillDate: srSaleE.date, returnType: 'Bogus',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 1, rate: 100, gstPercentage: 5 }]
+    }), "must be 'Grey' or 'Finish'"));
+
+    check('An invalid return_type is rejected before any DB write (purchase return)', await rejects(() => purchaseReturnService.createPurchaseReturn(company.id, actor, {
+      returnNumber: 900, date: '2026-06-15', supplierId: returnSupplierId, financialYear: '2025-26',
+      againstPurchaseId: prPurchaseA.id, againstBillDate: prPurchaseA.date, returnType: 'Bogus',
+      items: [{ categoryId: quality.category_id, qualityId: quality.id, descriptionId: description.id, hsnId: hsn.id, meters: 1, rate: 100, gstPercentage: 5 }]
+    }), "must be 'Grey' or 'Finish'"));
+
     await closeDb();
     console.log('\nDatabase closed.');
 
